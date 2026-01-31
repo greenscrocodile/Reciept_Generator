@@ -3,91 +3,123 @@ import pandas as pd
 from docxtpl import DocxTemplate
 from num2words import num2words
 import io
+from datetime import date
 
-st.set_page_config(page_title="Step-by-Step Receipt Gen", layout="centered")
-st.title("📑 Step-by-Step Receipt Entry")
+st.set_page_config(page_title="Challan Search & Gen", layout="wide")
+st.title("🔍 Individual Challan Search & Entry")
 
-# Initialize session state to store manual entries
-if 'manual_data' not in st.session_state:
-    st.session_state.manual_data = {}
-if 'current_idx' not in st.session_state:
-    st.session_state.current_idx = 0
+# Initialize storage for the receipts we create
+if 'all_receipts' not in st.session_state:
+    st.session_state.all_receipts = []
+if 'locked_settings' not in st.session_state:
+    st.session_state.locked_settings = None
 
-# --- SIDEBAR: Settings ---
-st.sidebar.header("Global Settings")
-start_challan = st.sidebar.number_input("Starting Challan No.", min_value=1, value=100)
-p_date = st.sidebar.text_input("Payment Date (pdate)", value="31/01/2026")
+# --- SECTION 1: ONE-TIME SETTINGS ---
+st.subheader("1. Global Settings")
+if st.session_state.locked_settings is None:
+    col_set1, col_set2 = st.columns(2)
+    with col_set1:
+        s_challan = st.number_input("Starting Challan No.", min_value=1, value=100)
+    with col_set2:
+        s_pdate = st.date_input("Payment Date (pdate)", value=date.today())
+    
+    if st.button("Lock Settings & Start Entry"):
+        st.session_state.locked_settings = {"challan": s_challan, "pdate": s_pdate.strftime("%d/%m/%Y")}
+        st.rerun()
+else:
+    st.success(f"Locked: Starting Challan **{st.session_state.locked_settings['challan']}** | Date **{st.session_state.locked_settings['pdate']}**")
+    if st.button("Reset Settings"):
+        st.session_state.locked_settings = None
+        st.session_state.all_receipts = []
+        st.rerun()
 
-# --- FILE UPLOAD ---
-tpl_file = st.file_uploader("1. Upload Word Template", type=["docx"])
-data_file = st.file_uploader("2. Upload Excel Data", type=["xlsx", "csv"])
+# --- SECTION 2: FILE UPLOAD ---
+tpl_file = st.file_uploader("Upload Word Template", type=["docx"])
+data_file = st.file_uploader("Upload Master Excel", type=["xlsx", "csv"])
 
-if tpl_file and data_file:
+if tpl_file and data_file and st.session_state.locked_settings:
     df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
-    total_records = len(df)
-
-    # Current Record Info
-    idx = st.session_state.current_idx
-    row = df.iloc[idx]
     
     st.divider()
-    st.subheader(f"Record {idx + 1} of {total_records}")
-    st.info(f"**Consumer:** {row['Name']} ({row['Consumer Number']})")
-
-    # Manual Input Form for this specific record
-    # We use the index as a key so Streamlit remembers the data
-    col1, col2 = st.columns(2)
-    with col1:
-        pay_type = st.selectbox(f"Payment Type", ["Cheque", "DD", "Online", "Cash"], key=f"pt_{idx}")
-        pay_no = st.text_input(f"Instrument/Ref No.", key=f"pn_{idx}")
-    with col2:
-        bank = st.text_input(f"Bank Name", key=f"bk_{idx}")
-        date = st.text_input(f"Instrument Date", placeholder="DD/MM/YYYY", key=f"dt_{idx}")
-
-    # Navigation Buttons
-    nav_col1, nav_col2, nav_col3 = st.columns([1,1,1])
+    st.subheader("2. Search Consumer")
     
-    with nav_col1:
-        if st.button("⬅️ Previous") and idx > 0:
-            st.session_state.current_idx -= 1
-            st.rerun()
+    # Search Inputs
+    search_col1, search_col2, search_col3 = st.columns(3)
+    with search_col1:
+        search_num = st.number_input("Enter Consumer Number", step=1)
+    with search_col2:
+        search_month = st.selectbox("Select Month", options=list(range(1, 13)))
+    with search_col3:
+        search_year = st.selectbox("Select Year", options=[2025, 2026])
 
-    with nav_col2:
-        if st.button("Next ➡️") and idx < total_records - 1:
-            st.session_state.current_idx += 1
-            st.rerun()
+    # Filter the Master Data
+    result = df[(df['Consumer Number'] == search_num) & (df['Month'] == search_month) & (df['Year'] == search_year)]
 
-    # --- GENERATION SECTION ---
-    if idx == total_records - 1:
-        st.success("All data entered! Ready to generate.")
-        if st.button("🚀 Generate All Receipts", type="primary"):
+    if not result.empty:
+        found_row = result.iloc[0]
+        amt = float(found_row['Amount'])
+        word_amt = num2words(amt, lang='en_IN').title()
+
+        # Display Auto-Found Data
+        st.success(f"**Found:** {found_row['Name']} | **Amount:** ₹{amt:,.2f}")
+        st.text(f"In Words: {word_amt} Only")
+
+        st.divider()
+        st.subheader("3. Payment Details")
+        
+        # Split fields as requested: Right half dropdown, Left half number
+        pay_col1, pay_col2 = st.columns(2)
+        with pay_col2: # Right side
+            p_type = st.selectbox("Payment Mode", ["Cheque", "Demand Draft"])
+        with pay_col1: # Left side
+            p_no = st.text_input(f"Enter {p_type} Number")
+
+        # Bank and Date
+        bank_col1, bank_col2 = st.columns(2)
+        with bank_col1:
+            p_date = st.date_input("Instrument Date")
+        with bank_col2:
+            p_bank = st.text_input("Bank Name")
+
+        if st.button("Add to Batch"):
+            # Calculate current serial challan
+            current_serial = st.session_state.locked_settings['challan'] + len(st.session_state.all_receipts)
+            
+            new_receipt = {
+                'challan': current_serial,
+                'pdate': st.session_state.locked_settings['pdate'],
+                'name': found_row['Name'],
+                'num': found_row['Consumer Number'],
+                'month': found_row['Month'],
+                'year': found_row['Year'], # Added year tag
+                'amount': f"{amt:,.2f}",
+                'words': word_amt,
+                'pay_type': p_type,
+                'pay_no': p_no,
+                'bank': p_bank,
+                'date': p_date.strftime("%d/%m/%Y")
+            }
+            st.session_state.all_receipts.append(new_receipt)
+            st.toast(f"Added receipt for {found_row['Name']}!")
+
+    else:
+        st.warning("No record found for this Consumer Number, Month, and Year.")
+
+    # --- SECTION 3: DOWNLOAD ---
+    if st.session_state.all_receipts:
+        st.divider()
+        st.write(f"### Current Batch ({len(st.session_state.all_receipts)} receipts added)")
+        st.dataframe(pd.DataFrame(st.session_state.all_receipts)[['challan', 'name', 'num', 'amount']])
+        
+        if st.button("Generate & Download Word File", type="primary"):
             doc = DocxTemplate(tpl_file)
-            receipt_list = []
-
-            for i, r in df.iterrows():
-                amt = float(r['Amount'])
-                # Pulling the data we saved in the session state keys
-                receipt_list.append({
-                    'challan': int(start_challan + i),
-                    'pdate': p_date,
-                    'name': r['Name'],
-                    'num': r['Consumer Number'],
-                    'month': r['Month'],
-                    'amount': f"{amt:,.2f}",
-                    'words': num2words(amt, lang='en_IN').title(),
-                    'pay_type': st.session_state[f"pt_{i}"],
-                    'pay_no': st.session_state[f"pn_{i}"],
-                    'bank': st.session_state[f"bk_{i}"],
-                    'date': st.session_state[f"dt_{i}"]
-                })
-
-            doc.render({'receipts': receipt_list})
+            doc.render({'receipts': st.session_state.all_receipts})
+            
             output = io.BytesIO()
             doc.save(output)
-            
             st.download_button(
-                label="📥 Download Completed Word Doc",
+                label="📥 Download Generated File",
                 data=output.getvalue(),
-                file_name="All_Receipts.docx",
+                file_name=f"Receipts_{date.today()}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
