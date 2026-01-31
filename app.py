@@ -10,7 +10,7 @@ st.set_page_config(page_title="Challan Gen Pro", layout="wide")
 # --- INDIAN CURRENCY FORMATTING (NO DECIMALS) ---
 def format_indian_currency(number):
     try:
-        main = str(int(float(str(number).replace(',', ''))))
+        main = str(int(float(str(number).replace(',', '')))) 
         if len(main) <= 3: return main
         last_three = main[-3:]
         remaining = main[:-3]
@@ -20,7 +20,8 @@ def format_indian_currency(number):
             remaining = remaining[:-2]
         if remaining: res = remaining + res
         return f"{res},{last_three}"
-    except: return str(number)
+    except:
+        return number
 
 # --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state:
@@ -30,59 +31,25 @@ if 'locked' not in st.session_state:
 if 'show_batch' not in st.session_state:
     st.session_state.show_batch = False
 
-# --- EDIT DIALOG (POP-UP) ---
-@st.dialog("Edit Record")
-def edit_record_popup(index):
-    rec = st.session_state.all_receipts[index]
-    
-    st.write(f"Editing Challan: **{rec['challan']}** ({rec['name']})")
-    
-    # Editable fields with limitations
-    new_amt = st.text_input("Amount", value=rec['amount'].replace(',', ''))
-    new_month = st.selectbox("Month", ["January", "February", "March", "April", "May", "June", 
-                                       "July", "August", "September", "October", "November", "December"],
-                             index=["January", "February", "March", "April", "May", "June", 
-                                    "July", "August", "September", "October", "November", "December"].index(rec['month']))
-    new_year = st.selectbox("Year", [2025, 2026], index=[2025, 2026].index(rec['year']))
-    new_bank = st.text_input("Bank Name", value=rec['bank'])
-    new_type = st.selectbox("Type", ["Cheque", "Demand Draft"], index=0 if rec['pay_type'] == "Cheque" else 1)
-    new_no = st.text_input("Number", value=rec['pay_no'], max_chars=6)
-    
-    # Date needs conversion for the widget
-    d_parts = rec['date'].split('.')
-    current_date = date(int(d_parts[2]), int(d_parts[1]), int(d_parts[0]))
-    new_date = st.date_input("Instrument Date", value=current_date)
-
-    if st.button("Save Changes"):
-        # Update record
-        st.session_state.all_receipts[index].update({
-            'amount': format_indian_currency(new_amt),
-            'words': num2words(float(new_amt), lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and "),
-            'month': new_month,
-            'year': new_year,
-            'bank': new_bank,
-            'pay_type': new_type,
-            'pay_no': new_no,
-            'date': new_date.strftime("%d.%m.%Y")
-        })
-        st.rerun()
-
-# --- SIDEBAR ---
+# --- RIGHT SIDEBAR: CONFIG & FILES ---
 with st.sidebar:
-    st.header("⚙️ Configuration")
+    st.header("⚙️ Setup Configuration")
     s_challan = st.text_input("Starting Challan No.", disabled=st.session_state.locked)
     s_pdate = st.date_input("Payment Date (pdate)", disabled=st.session_state.locked)
+    
     st.divider()
-    tpl_file = st.file_uploader("Template (.docx)", type=["docx"])
-    data_file = st.file_uploader("Master Excel", type=["xlsx", "csv"])
+    tpl_file = st.file_uploader("Upload Word Template (.docx)", type=["docx"])
+    data_file = st.file_uploader("Upload Master Excel", type=["xlsx", "csv"])
     
     if not st.session_state.locked:
-        if st.button("Confirm Setup"):
+        if st.button("Confirm Setup", type="primary"):
             if s_challan and tpl_file and data_file:
                 st.session_state.locked = True
                 st.session_state.start_no = int(s_challan)
                 st.session_state.formatted_pdate = s_pdate.strftime("%d.%m.%Y")
                 st.rerun()
+            else:
+                st.error("Please complete all fields.")
     else:
         if st.button("Reset Session"):
             st.session_state.locked = False
@@ -90,22 +57,22 @@ with st.sidebar:
             st.rerun()
 
 # --- MAIN AREA ---
-st.title("📑 Receipt Workflow")
+st.title("📑 Receipt Generation Workflow")
 
 if st.session_state.locked:
-    # Header Metrics
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Start No.", st.session_state.start_no)
-    m2.metric("Next No.", next_no)
-    m3.metric("Date", st.session_state.formatted_pdate)
-    m4.metric("Batch Count", curr_count)
+    
+    h1, h2, h3, h4 = st.columns(4)
+    h1.metric("Starting No.", st.session_state.start_no)
+    h2.metric("Next Challan No.", next_no)
+    h3.metric("Payment Date", st.session_state.formatted_pdate)
+    h4.metric("Batch Count", curr_count)
 
     df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
     st.divider()
     
-    # Workflow
+    # 1. Sequential Workflow
     c1, c2 = st.columns(2)
     with c1:
         month_list = ["January", "February", "March", "April", "May", "June", 
@@ -118,66 +85,92 @@ if st.session_state.locked:
     
     if search_num:
         m_idx = month_list.index(sel_month) + 1
-        res = df[(df['Consumer Number'].astype(str) == search_num) & (df['Month'] == m_idx) & (df['Year'] == sel_year)]
+        result = df[(df['Consumer Number'].astype(str) == search_num) & 
+                    (df['Month'] == m_idx) & 
+                    (df['Year'] == sel_year)]
 
-        if not res.empty:
-            row = res.iloc[0]
-            st.success(f"**Name:** {row['Name']} | **Amount:** ₹{format_indian_currency(row['Amount'])}")
+        if not result.empty:
+            row = result.iloc[0]
+            amt_val = float(row['Amount'])
+            ind_amt = format_indian_currency(amt_val)
+            
+            st.success(f"**Name:** {row['Name']} | **Amount:** ₹{ind_amt}")
 
-            with st.form("entry_form", clear_on_submit=True):
-                bank = st.text_input("Bank Name")
+            with st.form("instrument_details", clear_on_submit=True):
+                bank_name = st.text_input("Bank Name")
                 f1, f2 = st.columns(2)
                 with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                with f2: p_no = st.text_input(f"{mode} Number", max_chars=6)
-                p_date = st.date_input(f"{mode} Date")
+                with f2: inst_no = st.text_input(f"{mode} Number", max_chars=6)
+                inst_date = st.date_input(f"{mode} Date")
                 
                 if st.form_submit_button("Add to Batch"):
-                    if bank and p_no and len(p_no) == 6:
-                        st.session_state.all_receipts.append({
-                            'challan': next_no, 'pdate': st.session_state.formatted_pdate,
-                            'name': row['Name'], 'num': row['Consumer Number'],
-                            'month': sel_month, 'year': sel_year,
-                            'amount': format_indian_currency(row['Amount']),
-                            'words': num2words(float(row['Amount']), lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and "),
-                            'pay_type': mode, 'pay_no': p_no, 'bank': bank, 'date': p_date.strftime("%d.%m.%Y")
-                        })
-                        # 2. View batch table button should off when record added
+                    if bank_name and inst_no and len(inst_no) == 6:
+                        words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
+                        new_rec = {
+                            'challan': next_no,
+                            'pdate': st.session_state.formatted_pdate,
+                            'name': row['Name'],
+                            'num': row['Consumer Number'],
+                            'month': sel_month,
+                            'year': sel_year,
+                            'amount': ind_amt,
+                            'words': words,
+                            'pay_type': mode,
+                            'pay_no': inst_no,
+                            'bank': bank_name,
+                            'date': inst_date.strftime("%d.%m.%Y")
+                        }
+                        st.session_state.all_receipts.append(new_rec)
+                        # 2. Automatically turn off View Batch table when new record added
                         st.session_state.show_batch = False
                         st.rerun()
+                    else:
+                        st.error("Fill all fields correctly.")
+        else:
+            st.error("No record found.")
 
-    # --- BATCH VIEW & DOWNLOAD ---
+    # --- BATCH VIEW (EDIT/DELETE) & DOWNLOAD ---
     if st.session_state.all_receipts:
         st.divider()
-        st.session_state.show_batch = st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch)
+        st.session_state.show_batch = st.checkbox("👁️ View/Edit Batch Table", value=st.session_state.show_batch)
         
         if st.session_state.show_batch:
-            # Custom Table with Edit/Delete
-            # 1. No Word representation in table
-            cols = st.columns([1, 2, 1, 1, 1, 1, 1, 1])
-            fields = ["Challan", "Name", "Number", "Amount", "Mode", "Inst No", "Edit", "Delete"]
-            for col, field in zip(cols, fields): col.write(f"**{field}**")
+            st.info("💡 **Blue Edit:** Change values directly in the table. | **Delete:** Select a row and press 'Delete' on your keyboard.")
             
-            for i, r in enumerate(st.session_state.all_receipts):
-                c = st.columns([1, 2, 1, 1, 1, 1, 1, 1])
-                c[0].write(r['challan'])
-                c[1].write(r['name'])
-                c[2].write(r['num'])
-                c[3].write(r['amount'])
-                c[4].write(r['pay_type'])
-                c[5].write(r['pay_no'])
-                # 3. Edit Button (Blue)
-                if c[6].button("Edit", key=f"ed_{i}", type="primary"):
-                    edit_record_popup(i)
-                # 4. Delete Button
-                if c[7].button("Delete", key=f"del_{i}"):
-                    st.session_state.all_receipts.pop(i)
-                    # Adjust subsequent challan numbers if needed? 
-                    # Usually, challans are serial, so deleting might need logic update
-                    st.rerun()
-        
-        if st.button("🚀 Finalize & Download Word Doc"):
+            # Convert batch to DataFrame for editing
+            batch_df = pd.DataFrame(st.session_state.all_receipts)
+            
+            # 1. No need to mention Word representation in table (Words column hidden)
+            # 3 & 4. Editable table with Delete support
+            edited_df = st.data_editor(
+                batch_df,
+                column_order=("challan", "name", "num", "month", "year", "amount", "pay_type", "pay_no", "bank", "date"),
+                column_config={
+                    "amount": st.column_config.TextColumn("Amount (Editable)"),
+                    "month": st.column_config.SelectboxColumn("Month", options=month_list),
+                    "year": st.column_config.SelectboxColumn("Year", options=[2025, 2026]),
+                    "pay_type": st.column_config.SelectboxColumn("Type", options=["Cheque", "Demand Draft"]),
+                },
+                num_rows="dynamic", # Enables deletion
+                use_container_width=True,
+                key="batch_editor"
+            )
+            
+            # Sync edits back to session state and update 'words' if amount changed
+            if st.button("💾 Save Changes to Batch"):
+                updated_list = edited_df.to_dict('records')
+                for rec in updated_list:
+                    # Recalculate words in case amount was edited
+                    clean_amt = str(rec['amount']).replace(',', '')
+                    rec['words'] = num2words(float(clean_amt), lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
+                st.session_state.all_receipts = updated_list
+                st.success("Batch updated!")
+                st.rerun()
+
+        if st.button("🚀 Finalize & Generate Word Doc", type="primary"):
             doc = DocxTemplate(tpl_file)
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO()
             doc.save(output)
-            st.download_button("📥 Download", output.getvalue(), file_name=f"receipt_{date.today().strftime('%d_%m_%Y')}.docx")
+            fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
+            st.download_button("📥 Click to Download File", output.getvalue(), file_name=fn)
