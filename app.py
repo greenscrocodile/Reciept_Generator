@@ -6,6 +6,7 @@ import io
 from datetime import date
 import uuid
 import re
+import os # Added to check for the file in your GitHub folder
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
@@ -54,12 +55,23 @@ with st.sidebar:
     s_challan = st.text_input("Starting Challan", disabled=st.session_state.locked)
     s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
     st.divider()
-    tpl_file = st.file_uploader("Upload Template (.docx)", type=["docx"])
+    
+    # AUTO-LOAD TEMPLATE FROM GITHUB
+    TEMPLATE_NAME = "Test.docx"
+    if os.path.exists(TEMPLATE_NAME):
+        st.success(f"✅ Template '{TEMPLATE_NAME}' loaded from GitHub")
+        # Read the file from the project folder
+        with open(TEMPLATE_NAME, "rb") as f:
+            template_bytes = f.read()
+    else:
+        st.error(f"❌ {TEMPLATE_NAME} not found in GitHub folder!")
+        template_bytes = None
+
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx", "csv"])
 
     if not st.session_state.locked:
         if st.button("Confirm Setup", type="primary"):
-            if s_challan and tpl_file and data_file:
+            if s_challan and template_bytes and data_file:
                 st.session_state.locked = True
                 st.session_state.start_no = int(s_challan)
                 st.session_state.formatted_pdate = s_pdate.strftime("%d.%m.%Y")
@@ -126,14 +138,14 @@ if st.session_state.locked:
                         st.session_state.show_batch = False
                         st.rerun()
                     else:
-                        st.error("Invalid Entry: Check Bank Name (no symbols) and Instrument Number (6 digits).")
+                        st.error("Invalid Entry: Check Bank Name and Instrument Number.")
 
     # --- BATCH TABLE ---
     if st.session_state.all_receipts:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
-            t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5]) # Adjusted column ratios
+            t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
             t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
             t_head[3].write("**Mode**"); t_head[4].write("**Inst. No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
 
@@ -143,7 +155,7 @@ if st.session_state.locked:
                 tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
 
                 with tcol[6]:
-                    s1, s2 = st.columns(2) # Only 2 columns needed now
+                    s1, s2 = st.columns(2)
                     if s1.button("✏️", key=f"e_{rec['id']}", help="Edit Amount"): edit_amount_dialog(i)
                     if s2.button("🗑️", key=f"d_{rec['id']}", help="Delete"):
                         st.session_state.all_receipts.pop(i)
@@ -151,7 +163,8 @@ if st.session_state.locked:
                         st.rerun()
 
         if st.button("🚀 Generate Final Word File", type="primary"):
-            doc = DocxTemplate(tpl_file)
+            # Use the bytes loaded from GitHub
+            doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO()
             doc.save(output)
