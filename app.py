@@ -62,7 +62,7 @@ if 'show_batch' not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    s_challan = st.text_input("Starting Challan No.", disabled=st.session_state.locked)
+    s_challan = st.text_input("Starting Challan No", disabled=st.session_state.locked)
     s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
     st.divider()
     tpl_file = st.file_uploader("Template (.docx)", type=["docx"])
@@ -87,8 +87,8 @@ if st.session_state.locked:
     next_no = st.session_state.start_no + curr_count
     
     h1, h2, h3, h4 = st.columns(4)
-    h1.metric("Starting Challan.", st.session_state.start_no)
-    h2.metric("Current Challan.", next_no)
+    h1.metric("Starting Challan", st.session_state.start_no)
+    h2.metric("Current Challan", next_no)
     h3.metric("Date", st.session_state.formatted_pdate)
     h4.metric("Challans Entered", curr_count)
 
@@ -199,6 +199,7 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Now", output.getvalue(), file_name=fn)
+
 
 
 
