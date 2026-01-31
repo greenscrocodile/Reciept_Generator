@@ -9,7 +9,6 @@ st.set_page_config(page_title="Challan Gen", layout="wide")
 
 # --- INDIAN CURRENCY FORMATTING (NO DECIMALS) ---
 def format_indian_currency(number):
-    # Convert to integer to drop decimals
     main = str(int(float(number))) 
     if len(main) <= 3: return main
     last_three = main[-3:]
@@ -26,6 +25,9 @@ if 'all_receipts' not in st.session_state:
     st.session_state.all_receipts = []
 if 'locked' not in st.session_state:
     st.session_state.locked = False
+# Logic to handle the eye-button state
+if 'show_table' not in st.session_state:
+    st.session_state.show_table = False
 
 # --- RIGHT SIDEBAR: CONFIG & FILES ---
 with st.sidebar:
@@ -50,13 +52,13 @@ with st.sidebar:
         if st.button("Reset / New Session"):
             st.session_state.locked = False
             st.session_state.all_receipts = []
+            st.session_state.show_table = False
             st.rerun()
 
 # --- MAIN AREA ---
 st.title("📑 Receipt Generation Workflow")
 
 if st.session_state.locked:
-    # 1. UPDATED HEADER: Now includes Current Count
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
     
@@ -64,13 +66,12 @@ if st.session_state.locked:
     h1.metric("Starting No.", st.session_state.start_no)
     h2.metric("Next Challan No.", next_no)
     h3.metric("Payment Date", st.session_state.formatted_pdate)
-    h4.metric("Current Batch Count", curr_count) # Added current count alongside
+    h4.metric("Current Batch Count", curr_count)
 
     df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
     
     st.divider()
     
-    # 2. Sequential Workflow
     c1, c2 = st.columns(2)
     with c1:
         month_list = ["January", "February", "March", "April", "May", "June", 
@@ -90,16 +91,16 @@ if st.session_state.locked:
         if not result.empty:
             row = result.iloc[0]
             amt_val = float(row['Amount'])
-            
-            # Format: Indian commas, No decimals
             ind_amt = format_indian_currency(amt_val)
-            # Words remain accurate based on full value
             words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
             
             st.success(f"**Name:** {row['Name']} | **Amount:** ₹{ind_amt}")
 
+            # 1. & 2. Refined Form Logic
             with st.form("instrument_details", clear_on_submit=True):
-                bank_name = st.text_input("Bank Name")
+                # Bank Name setup to allow natural keyboard flow
+                bank_name = st.text_input("Bank Name") 
+                
                 f1, f2 = st.columns(2)
                 with f1:
                     mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
@@ -127,6 +128,8 @@ if st.session_state.locked:
                             'date': inst_date.strftime("%d.%m.%Y")
                         }
                         st.session_state.all_receipts.append(new_rec)
+                        # 2. Automatically set view table button to "OFF" when record is added
+                        st.session_state.show_table = False
                         st.success(f"Added Challan {next_no} to batch!")
                         st.rerun()
                     else:
@@ -137,8 +140,10 @@ if st.session_state.locked:
     # --- BATCH VIEW & DOWNLOAD ---
     if st.session_state.all_receipts:
         st.divider()
-        show_batch = st.checkbox("👁️ View Batch Table")
-        if show_batch:
+        # Using Session State to control the eye-button (checkbox)
+        st.session_state.show_table = st.checkbox("👁️ View Batch Table", value=st.session_state.show_table)
+        
+        if st.session_state.show_table:
             st.dataframe(pd.DataFrame(st.session_state.all_receipts), use_container_width=True)
         
         if st.button("🚀 Finalize & Generate Word Doc", type="primary"):
