@@ -3,4 +3,3 @@ pandas
 docxtpl
 num2words
 openpyxl
-mammoth
