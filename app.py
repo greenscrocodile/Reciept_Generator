@@ -23,22 +23,45 @@ def format_indian_currency(number):
     return f"{res},{last_three}"
 
 # --- DIALOGS ---
-@st.dialog("Edit Amount")
-def edit_amount_dialog(index):
+@st.dialog("Challan Preview (Template View)")
+def preview_dialog(index):
     rec = st.session_state.all_receipts[index]
-    current_val = rec['amount'].replace(",", "")
-    new_amt_str = st.text_input("Enter New Amount ", value=current_val)
     
-    if st.button("Save Changes"):
-        try:
-            new_amt = int(new_amt_str)
-            ind_amt = format_indian_currency(new_amt)
-            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
-            st.session_state.all_receipts[index]['amount'] = ind_amt
-            st.session_state.all_receipts[index]['words'] = new_words
-            st.rerun()
-        except ValueError:
-            st.error("Please enter a valid whole number.")
+    st.write(f"### Previewing Challan: {rec['challan']}")
+    st.info("This will generate a single Word document for this record so you can check the formatting.")
+    
+    # 1. Create a temporary document for just this one record
+    try:
+        # We need to reload the template from the uploaded file
+        # We seek(0) to ensure we read from the start of the file buffer
+        tpl_file.seek(0)
+        temp_doc = DocxTemplate(tpl_file)
+        
+        # 2. Render only this specific record
+        # Note: We wrap it in a list because your template uses {% for r in receipts %}
+        temp_doc.render({'receipts': [rec]})
+        
+        # 3. Save to a byte buffer
+        preview_buf = io.BytesIO()
+        temp_doc.save(preview_buf)
+        preview_buf.seek(0)
+        
+        # 4. Provide a specific download button for this preview
+        st.download_button(
+            label="📄 Open Word Preview",
+            data=preview_buf,
+            file_name=f"PREVIEW_{rec['num']}_{rec['month']}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True
+        )
+        
+        # Display the data summary below the button for quick reference
+        st.divider()
+        st.write("**Data injected into template:**")
+        st.json(rec)
+        
+    except Exception as e:
+        st.error(f"Could not generate preview: {e}")
 
 @st.dialog("Challan Preview")
 def preview_dialog(index):
@@ -199,6 +222,7 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Now", output.getvalue(), file_name=fn)
+
 
 
 
