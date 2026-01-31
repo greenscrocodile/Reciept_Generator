@@ -27,7 +27,7 @@ def format_indian_currency(number):
 def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
     current_val = rec['amount'].replace(",", "")
-    new_amt_str = st.text_input("New Amount (Numbers only)", value=current_val)
+    new_amt_str = st.text_input("Enter New Amount ", value=current_val)
     
     if st.button("Save Changes"):
         try:
@@ -62,8 +62,8 @@ if 'show_batch' not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    s_challan = st.text_input("Starting No.", disabled=st.session_state.locked)
-    s_pdate = st.date_input("Payment Date", disabled=st.session_state.locked)
+    s_challan = st.text_input("Starting Challan No.", disabled=st.session_state.locked)
+    s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
     st.divider()
     tpl_file = st.file_uploader("Template (.docx)", type=["docx"])
     data_file = st.file_uploader("Master Data (.xlsx)", type=["xlsx", "csv"])
@@ -87,10 +87,10 @@ if st.session_state.locked:
     next_no = st.session_state.start_no + curr_count
     
     h1, h2, h3, h4 = st.columns(4)
-    h1.metric("Starting No.", st.session_state.start_no)
-    h2.metric("Next No.", next_no)
+    h1.metric("Starting Challan.", st.session_state.start_no)
+    h2.metric("Current Challan.", next_no)
     h3.metric("Date", st.session_state.formatted_pdate)
-    h4.metric("Batch", curr_count)
+    h4.metric("Challans Entered", curr_count)
 
     df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
     st.divider()
@@ -127,9 +127,9 @@ if st.session_state.locked:
                 with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
                 with f2: 
                     # 2. LIMITATION: DD/Cheque Number (6 digits, allows leading zeros)
-                    inst_no = st.text_input(f"{mode} No.", max_chars=6, help="Must be exactly 6 digits (e.g., 001234)")
+                    inst_no = st.text_input("DD/Cheque No", max_chars=6, help="Must be exactly 6 digits (e.g., 001234)")
                 
-                inst_date = st.date_input("Instrument Date")
+                inst_date = st.date_input("DD/Cheque Date")
                 
                 if st.form_submit_button("Add to Batch"):
                     # Validation Checks
@@ -199,6 +199,7 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Now", output.getvalue(), file_name=fn)
+
 
 
 
