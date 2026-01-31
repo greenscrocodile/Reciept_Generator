@@ -164,12 +164,12 @@ if st.session_state.locked:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
-            t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
+            t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 2])
             t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
             t_head[3].write("**Mode**"); t_head[4].write("**Inst. No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
             
             for i, rec in enumerate(st.session_state.all_receipts):
-                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
+                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 2])
                 tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
                 tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
                 
@@ -190,3 +190,4 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Final Document", output.getvalue(), file_name=fn)
+
