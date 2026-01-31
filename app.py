@@ -4,155 +4,157 @@ from docxtpl import DocxTemplate
 from num2words import num2words
 import io
 from datetime import date
-import locale
 
-# Attempt to set locale for Indian currency formatting
-try:
-    locale.setlocale(locale.LC_ALL, 'en_IN')
-except:
-    pass # Fallback if locale is not installed on the server
+st.set_page_config(page_title="Challan Gen", layout="wide")
 
-st.set_page_config(page_title="Challan Search & Gen", layout="wide")
-st.title("🔍 Individual Challan Search & Entry")
+# --- CUSTOM INDIAN CURRENCY FORMATTING ---
+def format_indian_currency(number):
+    s = f"{float(number):.2f}"
+    parts = s.split('.')
+    main = parts[0]
+    decimal = parts[1]
+    if len(main) <= 3:
+        return f"{main}.{decimal}"
+    last_three = main[-3:]
+    remaining = main[:-3]
+    # Comma every 2 digits for Indian system
+    res = ""
+    while len(remaining) > 2:
+        res = "," + remaining[-2:] + res
+        remaining = remaining[:-2]
+    if remaining:
+        res = remaining + res
+    return f"{res},{last_three}.{decimal}"
 
-# Initialize storage
+# --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state:
     st.session_state.all_receipts = []
-if 'locked_settings' not in st.session_state:
-    st.session_state.locked_settings = None
+if 'locked' not in st.session_state:
+    st.session_state.locked = False
 
-# --- SECTION 1: ONE-TIME SETTINGS ---
-st.subheader("1. Global Settings")
-if st.session_state.locked_settings is None:
-    col_set1, col_set2 = st.columns(2)
-    with col_set1:
-        # Removed default and step buttons
-        s_challan = st.text_input("Starting Challan No.")
-    with col_set2:
-        # Date button (calendar)
-        s_pdate = st.date_input("Payment Date (pdate)")
-    
-    if st.button("Lock Settings & Start Entry"):
-        if s_challan:
-            # Using "." for pdate representation
-            st.session_state.locked_settings = {
-                "challan": int(s_challan), 
-                "pdate": s_pdate.strftime("%d.%m.%Y")
-            }
-            st.rerun()
-        else:
-            st.error("Please enter a Challan Number")
-else:
-    st.success(f"Locked: Starting Challan **{st.session_state.locked_settings['challan']}** | Date **{st.session_state.locked_settings['pdate']}**")
-    if st.button("Reset Settings"):
-        st.session_state.locked_settings = None
-        st.session_state.all_receipts = []
-        st.rerun()
-
-# --- SECTION 2: FILE UPLOAD ---
-tpl_file = st.file_uploader("Upload Word Template", type=["docx"])
-data_file = st.file_uploader("Upload Master Excel", type=["xlsx", "csv"])
-
-if tpl_file and data_file and st.session_state.locked_settings:
-    df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
+# --- RIGHT SIDEBAR: CONFIG & FILES ---
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    # 4. Challan, pdate, Doc, and Xl on the right
+    s_challan = st.text_input("Starting Challan No.", disabled=st.session_state.locked)
+    s_pdate = st.date_input("Payment Date (pdate)", disabled=st.session_state.locked)
     
     st.divider()
-    st.subheader("2. Search Consumer")
+    tpl_file = st.file_uploader("Upload Word Template", type=["docx"])
+    data_file = st.file_uploader("Upload Master Excel", type=["xlsx", "csv"])
     
-    search_col1, search_col2, search_col3 = st.columns(3)
-    with search_col1:
-        # Removed step buttons
-        search_num = st.text_input("Enter Consumer Number")
-    with search_col2:
-        # Displaying month names
-        month_names = ["January", "February", "March", "April", "May", "June", 
-                       "July", "August", "September", "October", "November", "December"]
-        search_month_name = st.selectbox("Select Month", options=month_names)
-        search_month_idx = month_names.index(search_month_name) + 1
-    with search_col3:
-        search_year = st.selectbox("Select Year", options=[2025, 2026])
+    if not st.session_state.locked:
+        if st.button("Start Entry Session"):
+            if s_challan and tpl_file and data_file:
+                st.session_state.locked = True
+                st.session_state.start_no = int(s_challan)
+                st.session_state.formatted_pdate = s_pdate.strftime("%d.%m.%Y")
+                st.rerun()
+            else:
+                st.error("Fill all settings & upload files!")
+    else:
+        if st.button("Reset Everything"):
+            st.session_state.locked = False
+            st.session_state.all_receipts = []
+            st.rerun()
 
-    if search_num:
+# --- MAIN AREA: SEARCH & ENTRY ---
+st.title("📑 Receipt Generation System")
+
+if st.session_state.locked:
+    st.info(f"Session Active: Starting @ {st.session_state.start_no} | Date: {st.session_state.formatted_pdate}")
+    
+    df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
+    
+    # 2. Search Section
+    with st.container(border=True):
+        st.subheader("Search Consumer")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            search_num = st.text_input("Consumer Number (No arrows)")
+        with c2:
+            month_list = ["January", "February", "March", "April", "May", "June", 
+                          "July", "August", "September", "October", "November", "December"]
+            search_month = st.selectbox("Month", options=month_list)
+        with c3:
+            search_year = st.selectbox("Year", options=[2025, 2026])
+        
+        # 2. Search Button
+        find_btn = st.button("🔍 Search Consumer", type="secondary")
+
+    if find_btn and search_num:
+        m_idx = month_list.index(search_month) + 1
         result = df[(df['Consumer Number'].astype(str) == search_num) & 
-                    (df['Month'] == search_month_idx) & 
+                    (df['Month'] == m_idx) & 
                     (df['Year'] == search_year)]
 
         if not result.empty:
-            found_row = result.iloc[0]
-            amt_val = float(found_row['Amount'])
+            row = result.iloc[0]
+            st.session_state.current_found = row
+        else:
+            st.error("No record found. Check Number, Month, and Year.")
+            st.session_state.current_found = None
+
+    # Entry Section
+    if 'current_found' in st.session_state and st.session_state.current_found is not None:
+        row = st.session_state.current_found
+        amt_val = float(row['Amount'])
+        
+        # 1. Indian Comma System & 2. Amount in words cleanup
+        ind_amt = format_indian_currency(amt_val)
+        words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
+        
+        st.success(f"**Target:** {row['Name']} | **Amount:** ₹{ind_amt}")
+        
+        with st.form("manual_entry"):
+            st.subheader("Payment Details")
+            f1, f2 = st.columns(2)
+            with f2: p_type = st.selectbox("Payment Mode", ["Cheque", "Demand Draft"])
+            with f1: p_no = st.text_input(f"{p_type} Number")
             
-            # 1. Indian Currency Formatting (1,23,456.00)
-            formatted_amt = f"{amt_val:,.2f}" # Standard
-            try:
-                formatted_amt = locale.format_string("%1.2f", amt_val, grouping=True)
-            except:
-                pass
-
-            # 2. Amount in words cleaning
-            word_amt = num2words(amt_val, lang='en_IN').replace(",", "") # Remove commas
-            word_amt = word_amt.replace(" And ", " and ").title() # lowercase "and", rest Title
-            # Ensure specifically "and" stays small even after Title case
-            word_amt = word_amt.replace(" And ", " and ") 
-
-            st.success(f"**Found:** {found_row['Name']} | **Amount:** ₹{formatted_amt}")
-            st.text(f"In Words: {word_amt} Only")
-
-            st.divider()
-            st.subheader("3. Payment Details")
+            f3, f4 = st.columns(2)
+            with f3: p_date = st.date_input("Instrument Date")
+            with f4: p_bank = st.text_input("Bank Name")
             
-            pay_col1, pay_col2 = st.columns(2)
-            with pay_col2: 
-                p_type = st.selectbox("Payment Mode", ["Cheque", "Demand Draft"])
-            with pay_col1: 
-                p_no = st.text_input(f"Enter {p_type} Number")
+            # 3. All fields mandatory to add
+            submit = st.form_submit_button("Add to Batch")
+            
+            if submit:
+                if p_no and p_bank:
+                    new_rec = {
+                        'challan': st.session_state.start_no + len(st.session_state.all_receipts),
+                        'pdate': st.session_state.formatted_pdate,
+                        'name': row['Name'],
+                        'num': row['Consumer Number'],
+                        'month': search_month,
+                        'year': row['Year'],
+                        'amount': ind_amt,
+                        'words': words,
+                        'pay_type': p_type,
+                        'pay_no': p_no,
+                        'bank': p_bank,
+                        'date': p_date.strftime("%d.%m.%Y")
+                    }
+                    st.session_state.all_receipts.append(new_rec)
+                    st.session_state.current_found = None
+                    st.success("Added to batch!")
+                    st.rerun()
+                else:
+                    st.error("All fields (Number, Date, Bank) are mandatory!")
 
-            bank_col1, bank_col2 = st.columns(2)
-            with bank_col1:
-                p_date = st.date_input("Instrument Date")
-            with bank_col2:
-                p_bank = st.text_input("Bank Name")
-
-            if st.button("Add to Batch"):
-                current_serial = st.session_state.locked_settings['challan'] + len(st.session_state.all_receipts)
-                
-                new_receipt = {
-                    'challan': current_serial,
-                    'pdate': st.session_state.locked_settings['pdate'],
-                    'name': found_row['Name'],
-                    'num': found_row['Consumer Number'],
-                    'month': search_month_name, # 5. Name of month
-                    'year': found_row['Year'],
-                    'amount': formatted_amt,
-                    'words': word_amt,
-                    'pay_type': p_type,
-                    'pay_no': p_no,
-                    'bank': p_bank,
-                    'date': p_date.strftime("%d.%m.%Y") # 3. Dot instead of slash
-                }
-                st.session_state.all_receipts.append(new_receipt)
-                st.toast(f"Added receipt for {found_row['Name']}!")
-
-        elif search_num:
-            st.warning("No record found.")
-
-    # --- SECTION 3: DOWNLOAD ---
+    # --- DOWNLOAD SECTION ---
     if st.session_state.all_receipts:
         st.divider()
-        st.write(f"### Current Batch ({len(st.session_state.all_receipts)} receipts)")
+        st.write(f"### Current Batch ({len(st.session_state.all_receipts)} items)")
+        st.table(pd.DataFrame(st.session_state.all_receipts)[['challan', 'name', 'amount']])
         
-        if st.button("🚀 Generate & Download", type="primary"):
+        if st.button("🚀 Finalize & Download Word Doc", type="primary"):
             doc = DocxTemplate(tpl_file)
             doc.render({'receipts': st.session_state.all_receipts})
-            
             output = io.BytesIO()
             doc.save(output)
-            
-            # 6. Filename formatting
+            # 6. Specific filename
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
-            
-            st.download_button(
-                label="📥 Download Now",
-                data=output.getvalue(),
-                file_name=fn,
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
+            st.download_button("📥 Click here to Download", output.getvalue(), file_name=fn)
+else:
+    st.warning("Please configure the settings in the right sidebar to begin.")
