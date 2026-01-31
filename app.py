@@ -5,8 +5,7 @@ from num2words import num2words
 import io
 from datetime import date
 import uuid
-import re
-import mammoth # New library for docx-to-html preview
+import re  # Added for validation
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
@@ -24,34 +23,6 @@ def format_indian_currency(number):
     return f"{res},{last_three}"
 
 # --- DIALOGS ---
-@st.dialog("Challan Document Preview", width="large")
-def preview_dialog(index, tpl_file):
-    rec = st.session_state.all_receipts[index]
-    
-    # 1. Create a temporary docx for just this one record
-    temp_doc = DocxTemplate(tpl_file)
-    # We pass it as a list with one item because your template uses a loop
-    temp_doc.render({'receipts': [rec]})
-    
-    # 2. Save to a byte stream
-    doc_io = io.BytesIO()
-    temp_doc.save(doc_io)
-    doc_io.seek(0)
-    
-    # 3. Convert Docx to HTML for the preview
-    result = mammoth.convert_to_html(doc_io)
-    html = result.value
-    
-    st.markdown("### 📄 Template Preview (Single Record)")
-    st.info("This is how your uploaded document will look with this data.")
-    
-    # Styling the preview box
-    st.markdown(f"""
-        <div style="background-color: white; padding: 40px; border: 1px solid #ccc; color: black; min-height: 400px;">
-            {html}
-        </div>
-    """, unsafe_allow_html=True)
-
 @st.dialog("Edit Amount")
 def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
@@ -68,6 +39,17 @@ def edit_amount_dialog(index):
             st.rerun()
         except ValueError:
             st.error("Please enter a valid whole number.")
+
+@st.dialog("Challan Preview")
+def preview_dialog(index):
+    rec = st.session_state.all_receipts[index]
+    st.markdown(f"### Challan No: {rec['challan']}")
+    st.write(f"**Consumer:** {rec['name']} ({rec['num']})")
+    st.write(f"**Amount:** ₹{rec['amount']}")
+    st.write(f"**Words:** {rec['words']} Only")
+    st.write(f"**Payment:** {rec['pay_type']} - {rec['pay_no']}")
+    st.write(f"**Bank:** {rec['bank']} ({rec['date']})")
+    st.write(f"**Period:** {rec['month']} {rec['year']}")
 
 # --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state:
@@ -120,12 +102,14 @@ if st.session_state.locked:
     with c2:
         sel_year = st.selectbox("Select Year", options=[2025, 2026])
 
-    search_num = st.text_input("Enter Consumer Number", max_chars=3)
+    # 1. LIMITATION: Consumer Number (3 digits only)
+    search_num = st.text_input("Enter Consumer Number", max_chars=3, help="Must be exactly 3 digits")
     
     if search_num:
+        # Check if it is exactly 3 digits
         if not re.match(r"^\d{3}$", search_num):
-            st.warning("⚠️ Consumer Number must be 3 digits.")
-            result = pd.DataFrame()
+            st.warning("⚠️ Consumer Number must be exactly 3 digits.")
+            result = pd.DataFrame() # Empty result to stop flow
         else:
             m_idx = month_list.index(sel_month) + 1
             result = df[(df['Consumer Number'].astype(str) == search_num) & (df['Month'] == m_idx) & (df['Year'] == sel_year)]
@@ -136,14 +120,32 @@ if st.session_state.locked:
             st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
             with st.form("entry_form", clear_on_submit=True):
-                bank_name = st.text_input("Bank Name")
+                # 3. LIMITATION: Bank Name (String with gaps, no symbols/numbers)
+                bank_name = st.text_input("Bank Name", help="Only letters and spaces allowed")
+                
                 f1, f2 = st.columns(2)
                 with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                with f2: inst_no = st.text_input(f"{mode} No.", max_chars=6)
+                with f2: 
+                    # 2. LIMITATION: DD/Cheque Number (6 digits, allows leading zeros)
+                    inst_no = st.text_input(f"{mode} No.", max_chars=6, help="Must be exactly 6 digits (e.g., 001234)")
+                
                 inst_date = st.date_input("Instrument Date")
                 
                 if st.form_submit_button("Add to Batch"):
-                    if re.match(r"^[a-zA-Z\s]+$", bank_name) and re.match(r"^\d{6}$", inst_no):
+                    # Validation Checks
+                    is_valid = True
+                    
+                    # Validate Bank Name
+                    if not re.match(r"^[a-zA-Z\s]+$", bank_name):
+                        st.error("❌ Bank Name must contain only letters and spaces (no numbers or symbols).")
+                        is_valid = False
+                    
+                    # Validate Instrument Number
+                    if not re.match(r"^\d{6}$", inst_no):
+                        st.error("❌ Instrument Number must be exactly 6 digits.")
+                        is_valid = False
+                        
+                    if is_valid:
                         ind_amt = format_indian_currency(amt_val)
                         words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
                         new_rec = {
@@ -154,8 +156,8 @@ if st.session_state.locked:
                         st.session_state.all_receipts.append(new_rec)
                         st.session_state.show_batch = False
                         st.rerun()
-                    else:
-                        st.error("Invalid Bank Name or 6-digit Instrument Number.")
+        elif search_num and re.match(r"^\d{3}$", search_num): 
+            st.error("No record found in the master data for this selection.")
 
     # --- BATCH TABLE ---
     if st.session_state.all_receipts:
@@ -163,22 +165,31 @@ if st.session_state.locked:
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
             t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
-            t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
-            t_head[3].write("**Mode**"); t_head[4].write("**Inst. No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
+            t_head[0].write("**No.**")
+            t_head[1].write("**Consumer**")
+            t_head[2].write("**Amount**")
+            t_head[3].write("**Mode**")
+            t_head[4].write("**Inst. No.**")
+            t_head[5].write("**Bank**")
+            t_head[6].write("**Actions**")
             
             for i, rec in enumerate(st.session_state.all_receipts):
                 tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
-                tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
-                tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
+                tcol[0].write(rec['challan'])
+                tcol[1].write(rec['name'])
+                tcol[2].write(f"₹{rec['amount']}")
+                tcol[3].write(rec['pay_type'])
+                tcol[4].write(rec['pay_no'])
+                tcol[5].write(rec['bank'])
                 
                 with tcol[6]:
-                    s1, s2, s3 = st.columns(3)
-                    # Pass the tpl_file to the preview dialog
-                    if s1.button("👁️", key=f"p_{rec['id']}"): preview_dialog(i, tpl_file)
-                    if s2.button("✏️", key=f"e_{rec['id']}"): edit_amount_dialog(i)
-                    if s3.button("🗑️", key=f"d_{rec['id']}"):
+                    sub1, sub2, sub3 = st.columns(3)
+                    if sub1.button("👁️", key=f"p_{rec['id']}", help="Preview"): preview_dialog(i)
+                    if sub2.button("✏️", key=f"e_{rec['id']}", help="Edit"): edit_amount_dialog(i)
+                    if sub3.button("🗑️", key=f"d_{rec['id']}", help="Delete"):
                         st.session_state.all_receipts.pop(i)
-                        for j in range(i, len(st.session_state.all_receipts)): st.session_state.all_receipts[j]['challan'] -= 1
+                        for j in range(i, len(st.session_state.all_receipts)):
+                            st.session_state.all_receipts[j]['challan'] -= 1
                         st.rerun()
 
         if st.button("🚀 Generate Final Word File", type="primary"):
