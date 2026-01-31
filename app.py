@@ -25,15 +25,27 @@ def format_indian_currency(number):
 @st.dialog("Edit Amount")
 def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
-    current_val = int(rec['amount'].replace(",", ""))
-    # 1. Removed decimals from the update field
-    new_amt = st.number_input("New Amount )", value=current_val)
+    # Strip commas so it's a clean number for the text box
+    current_val = rec['amount'].replace(",", "")
+    
+    # 1. Using text_input removes the step arrows
+    new_amt_str = st.text_input("New Amount (Numbers only)", value=current_val)
+    
     if st.button("Save Changes"):
-        ind_amt = format_indian_currency(new_amt)
-        new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
-        st.session_state.all_receipts[index]['amount'] = ind_amt
-        st.session_state.all_receipts[index]['words'] = new_words
-        st.rerun()
+        try:
+            # Convert text back to integer for processing
+            new_amt = int(new_amt_str)
+            
+            # Recalculate everything
+            ind_amt = format_indian_currency(new_amt)
+            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
+            
+            # Update the session state
+            st.session_state.all_receipts[index]['amount'] = ind_amt
+            st.session_state.all_receipts[index]['words'] = new_words
+            st.rerun()
+        except ValueError:
+            st.error("Please enter a valid whole number without symbols or decimals.")
 
 @st.dialog("Challan Preview")
 def preview_dialog(index):
@@ -174,4 +186,5 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Now", output.getvalue(), file_name=fn)
+
 
