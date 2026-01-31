@@ -5,11 +5,11 @@ from num2words import num2words
 import io
 from datetime import date
 import uuid
-import re  # Added for validation
+import re
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- INDIAN CURRENCY FORMATTING ---
+# --- INDIAN CURRENCY FORMATTING (STRICT NO DECIMALS) ---
 def format_indian_currency(number):
     main = str(int(float(number))) 
     if len(main) <= 3: return main
@@ -40,16 +40,43 @@ def edit_amount_dialog(index):
         except ValueError:
             st.error("Please enter a valid whole number.")
 
-@st.dialog("Challan Preview")
+@st.dialog("Challan Preview", width="large")
 def preview_dialog(index):
     rec = st.session_state.all_receipts[index]
-    st.markdown(f"### Challan No: {rec['challan']}")
-    st.write(f"**Consumer:** {rec['name']} ({rec['num']})")
-    st.write(f"**Amount:** ₹{rec['amount']}")
-    st.write(f"**Words:** {rec['words']} Only")
-    st.write(f"**Payment:** {rec['pay_type']} - {rec['pay_no']}")
-    st.write(f"**Bank:** {rec['bank']} ({rec['date']})")
-    st.write(f"**Period:** {rec['month']} {rec['year']}")
+    
+    # CSS for professional paper-style layout
+    st.markdown("""
+        <style>
+        .receipt-preview {
+            background-color: white; padding: 40px; border: 1px solid #ddd;
+            color: black; font-family: 'Courier New', Courier, monospace;
+            line-height: 1.5; box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+        }
+        .header-title { text-align: center; font-weight: bold; font-size: 1.2em; text-decoration: underline; }
+        .flex-row { display: flex; justify-content: space-between; margin-top: 20px; }
+        .data-label { font-weight: bold; }
+        .amount-box { border: 2px solid black; padding: 10px; display: inline-block; margin-top: 10px; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div class="receipt-preview">
+        <div class="header-title">G.A.R. 7 [See rule 26(1)] - ORIGINAL</div>
+        <div class="flex-row">
+            <span>CHALAN NO: {rec['challan']}/CC/HT/2025-26</span>
+            <span>DATE: {rec['pdate']}</span>
+        </div>
+        <p style="margin-top:20px;">Paid into: <b>STATE BANK OF INDIA, MAIN BRANCH</b></p>
+        <hr>
+        <p>Remittance of C.C.Charges from:</p>
+        <p><span class="data-label">M/s {rec['name']}</span> (C.C.No. {rec['num']})</p>
+        <p>Payment Mode: <b>{rec['pay_type']}</b> | No: <b>{rec['pay_no']}</b></p>
+        <p>Bank: <b>{rec['bank']}</b> | Inst. Date: <b>{rec['date']}</b></p>
+        <p>Period: <b>{rec['month']} {rec['year']}</b></p>
+        <div class="amount-box">TOTAL AMOUNT: ₹ {rec['amount']}</div>
+        <p style="margin-top:10px;"><i>Rupees {rec['words']} Only</i></p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state:
@@ -102,14 +129,12 @@ if st.session_state.locked:
     with c2:
         sel_year = st.selectbox("Select Year", options=[2025, 2026])
 
-    # 1. LIMITATION: Consumer Number (3 digits only)
-    search_num = st.text_input("Enter Consumer Number", max_chars=3, help="Must be exactly 3 digits")
+    search_num = st.text_input("Enter Consumer Number", max_chars=3)
     
     if search_num:
-        # Check if it is exactly 3 digits
         if not re.match(r"^\d{3}$", search_num):
             st.warning("⚠️ Consumer Number must be exactly 3 digits.")
-            result = pd.DataFrame() # Empty result to stop flow
+            result = pd.DataFrame()
         else:
             m_idx = month_list.index(sel_month) + 1
             result = df[(df['Consumer Number'].astype(str) == search_num) & (df['Month'] == m_idx) & (df['Year'] == sel_year)]
@@ -120,27 +145,17 @@ if st.session_state.locked:
             st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
             with st.form("entry_form", clear_on_submit=True):
-                # 3. LIMITATION: Bank Name (String with gaps, no symbols/numbers)
-                bank_name = st.text_input("Bank Name", help="Only letters and spaces allowed")
-                
+                bank_name = st.text_input("Bank Name")
                 f1, f2 = st.columns(2)
                 with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                with f2: 
-                    # 2. LIMITATION: DD/Cheque Number (6 digits, allows leading zeros)
-                    inst_no = st.text_input(f"{mode} No.", max_chars=6, help="Must be exactly 6 digits (e.g., 001234)")
-                
+                with f2: inst_no = st.text_input(f"{mode} No.", max_chars=6)
                 inst_date = st.date_input("Instrument Date")
                 
                 if st.form_submit_button("Add to Batch"):
-                    # Validation Checks
                     is_valid = True
-                    
-                    # Validate Bank Name
                     if not re.match(r"^[a-zA-Z\s]+$", bank_name):
-                        st.error("❌ Bank Name must contain only letters and spaces (no numbers or symbols).")
+                        st.error("❌ Bank Name must contain only letters and spaces.")
                         is_valid = False
-                    
-                    # Validate Instrument Number
                     if not re.match(r"^\d{6}$", inst_no):
                         st.error("❌ Instrument Number must be exactly 6 digits.")
                         is_valid = False
@@ -156,40 +171,27 @@ if st.session_state.locked:
                         st.session_state.all_receipts.append(new_rec)
                         st.session_state.show_batch = False
                         st.rerun()
-        elif search_num and re.match(r"^\d{3}$", search_num): 
-            st.error("No record found in the master data for this selection.")
+        elif search_num and re.match(r"^\d{3}$", search_num): st.error("No record found.")
 
-    # --- BATCH TABLE ---
     if st.session_state.all_receipts:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
             t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
-            t_head[0].write("**No.**")
-            t_head[1].write("**Consumer**")
-            t_head[2].write("**Amount**")
-            t_head[3].write("**Mode**")
-            t_head[4].write("**Inst. No.**")
-            t_head[5].write("**Bank**")
-            t_head[6].write("**Actions**")
+            t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
+            t_head[3].write("**Mode**"); t_head[4].write("**Inst. No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
             
             for i, rec in enumerate(st.session_state.all_receipts):
                 tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
-                tcol[0].write(rec['challan'])
-                tcol[1].write(rec['name'])
-                tcol[2].write(f"₹{rec['amount']}")
-                tcol[3].write(rec['pay_type'])
-                tcol[4].write(rec['pay_no'])
-                tcol[5].write(rec['bank'])
-                
+                tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
+                tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
                 with tcol[6]:
                     sub1, sub2, sub3 = st.columns(3)
-                    if sub1.button("👁️", key=f"p_{rec['id']}", help="Preview"): preview_dialog(i)
-                    if sub2.button("✏️", key=f"e_{rec['id']}", help="Edit"): edit_amount_dialog(i)
-                    if sub3.button("🗑️", key=f"d_{rec['id']}", help="Delete"):
+                    if sub1.button("👁️", key=f"p_{rec['id']}"): preview_dialog(i)
+                    if sub2.button("✏️", key=f"e_{rec['id']}"): edit_amount_dialog(i)
+                    if sub3.button("🗑️", key=f"d_{rec['id']}"):
                         st.session_state.all_receipts.pop(i)
-                        for j in range(i, len(st.session_state.all_receipts)):
-                            st.session_state.all_receipts[j]['challan'] -= 1
+                        for j in range(i, len(st.session_state.all_receipts)): st.session_state.all_receipts[j]['challan'] -= 1
                         st.rerun()
 
         if st.button("🚀 Generate Final Word File", type="primary"):
