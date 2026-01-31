@@ -174,7 +174,7 @@ if st.session_state.locked:
             t_head[6].write("**Actions**")
             
             for i, rec in enumerate(st.session_state.all_receipts):
-                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
+                tcol = st.columns([0.8, 2.5, 1.5, 1.5, 1.5, 2, 1.5])
                 tcol[0].write(rec['challan'])
                 tcol[1].write(rec['name'])
                 tcol[2].write(f"₹{rec['amount']}")
@@ -199,4 +199,5 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Now", output.getvalue(), file_name=fn)
+
 
