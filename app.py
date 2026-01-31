@@ -5,10 +5,11 @@ from num2words import num2words
 import io
 from datetime import date
 import uuid
+import re  # Added for validation
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- INDIAN CURRENCY FORMATTING (STRICT NO DECIMALS) ---
+# --- INDIAN CURRENCY FORMATTING ---
 def format_indian_currency(number):
     main = str(int(float(number))) 
     if len(main) <= 3: return main
@@ -25,27 +26,19 @@ def format_indian_currency(number):
 @st.dialog("Edit Amount")
 def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
-    # Strip commas so it's a clean number for the text box
     current_val = rec['amount'].replace(",", "")
-    
-    # 1. Using text_input removes the step arrows
     new_amt_str = st.text_input("New Amount (Numbers only)", value=current_val)
     
     if st.button("Save Changes"):
         try:
-            # Convert text back to integer for processing
             new_amt = int(new_amt_str)
-            
-            # Recalculate everything
             ind_amt = format_indian_currency(new_amt)
             new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
-            
-            # Update the session state
             st.session_state.all_receipts[index]['amount'] = ind_amt
             st.session_state.all_receipts[index]['words'] = new_words
             st.rerun()
         except ValueError:
-            st.error("Please enter a valid whole number without symbols or decimals.")
+            st.error("Please enter a valid whole number.")
 
 @st.dialog("Challan Preview")
 def preview_dialog(index):
@@ -102,7 +95,6 @@ if st.session_state.locked:
     df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
     st.divider()
 
-    # Step 1: Period
     c1, c2 = st.columns(2)
     with c1:
         month_list = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -110,12 +102,17 @@ if st.session_state.locked:
     with c2:
         sel_year = st.selectbox("Select Year", options=[2025, 2026])
 
-    # Step 2: Consumer
-    search_num = st.text_input("Enter Consumer Number")
+    # 1. LIMITATION: Consumer Number (3 digits only)
+    search_num = st.text_input("Enter Consumer Number", max_chars=3, help="Must be exactly 3 digits")
     
     if search_num:
-        m_idx = month_list.index(sel_month) + 1
-        result = df[(df['Consumer Number'].astype(str) == search_num) & (df['Month'] == m_idx) & (df['Year'] == sel_year)]
+        # Check if it is exactly 3 digits
+        if not re.match(r"^\d{3}$", search_num):
+            st.warning("⚠️ Consumer Number must be exactly 3 digits.")
+            result = pd.DataFrame() # Empty result to stop flow
+        else:
+            m_idx = month_list.index(sel_month) + 1
+            result = df[(df['Consumer Number'].astype(str) == search_num) & (df['Month'] == m_idx) & (df['Year'] == sel_year)]
 
         if not result.empty:
             row = result.iloc[0]
@@ -123,14 +120,32 @@ if st.session_state.locked:
             st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
             with st.form("entry_form", clear_on_submit=True):
-                bank_name = st.text_input("Bank Name")
+                # 3. LIMITATION: Bank Name (String with gaps, no symbols/numbers)
+                bank_name = st.text_input("Bank Name", help="Only letters and spaces allowed")
+                
                 f1, f2 = st.columns(2)
                 with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                with f2: inst_no = st.text_input(f"{mode} No.", max_chars=6)
+                with f2: 
+                    # 2. LIMITATION: DD/Cheque Number (6 digits, allows leading zeros)
+                    inst_no = st.text_input(f"{mode} No.", max_chars=6, help="Must be exactly 6 digits (e.g., 001234)")
+                
                 inst_date = st.date_input("Instrument Date")
                 
                 if st.form_submit_button("Add to Batch"):
-                    if bank_name and len(inst_no) == 6:
+                    # Validation Checks
+                    is_valid = True
+                    
+                    # Validate Bank Name
+                    if not re.match(r"^[a-zA-Z\s]+$", bank_name):
+                        st.error("❌ Bank Name must contain only letters and spaces (no numbers or symbols).")
+                        is_valid = False
+                    
+                    # Validate Instrument Number
+                    if not re.match(r"^\d{6}$", inst_no):
+                        st.error("❌ Instrument Number must be exactly 6 digits.")
+                        is_valid = False
+                        
+                    if is_valid:
                         ind_amt = format_indian_currency(amt_val)
                         words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
                         new_rec = {
@@ -141,15 +156,14 @@ if st.session_state.locked:
                         st.session_state.all_receipts.append(new_rec)
                         st.session_state.show_batch = False
                         st.rerun()
-        else: st.error("No record found.")
+        elif search_num and re.match(r"^\d{3}$", search_num): 
+            st.error("No record found in the master data for this selection.")
 
     # --- BATCH TABLE ---
     if st.session_state.all_receipts:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
-            
-            # Use small columns for a tighter layout
             t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
             t_head[0].write("**No.**")
             t_head[1].write("**Consumer**")
@@ -168,7 +182,6 @@ if st.session_state.locked:
                 tcol[4].write(rec['pay_no'])
                 tcol[5].write(rec['bank'])
                 
-                # Smaller Icons using Button Groups
                 with tcol[6]:
                     sub1, sub2, sub3 = st.columns(3)
                     if sub1.button("👁️", key=f"p_{rec['id']}", help="Preview"): preview_dialog(i)
@@ -186,5 +199,3 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Now", output.getvalue(), file_name=fn)
-
-
