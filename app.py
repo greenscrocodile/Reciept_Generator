@@ -8,6 +8,7 @@ import uuid
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
+# --- INDIAN CURRENCY FORMATTING (STRICT NO DECIMALS) ---
 def format_indian_currency(number):
     main = str(int(float(number))) 
     if len(main) <= 3: return main
@@ -20,22 +21,14 @@ def format_indian_currency(number):
     if remaining: res = remaining + res
     return f"{res},{last_three}"
 
-# --- INITIALIZATION ---
-if 'all_receipts' not in st.session_state:
-    st.session_state.all_receipts = []
-if 'locked' not in st.session_state:
-    st.session_state.locked = False
-if 'show_batch' not in st.session_state:
-    st.session_state.show_batch = False
-
-# --- DIALOGS FOR EDIT & PREVIEW ---
+# --- DIALOGS ---
 @st.dialog("Edit Amount")
 def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
-    # Strip commas to make it numeric for the input
-    current_val = float(rec['amount'].replace(",", ""))
-    new_amt = st.number_input("New Amount", value=current_val, step=1.0)
-    if st.button("Update & Recalculate Words"):
+    current_val = int(rec['amount'].replace(",", ""))
+    # 1. Removed decimals from the update field
+    new_amt = st.number_input("New Amount (Integer only)", value=current_val, step=1)
+    if st.button("Save Changes"):
         ind_amt = format_indian_currency(new_amt)
         new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
         st.session_state.all_receipts[index]['amount'] = ind_amt
@@ -45,13 +38,21 @@ def edit_amount_dialog(index):
 @st.dialog("Challan Preview")
 def preview_dialog(index):
     rec = st.session_state.all_receipts[index]
-    st.write(f"### Challan No: {rec['challan']}")
+    st.markdown(f"### Challan No: {rec['challan']}")
     st.write(f"**Consumer:** {rec['name']} ({rec['num']})")
     st.write(f"**Amount:** ₹{rec['amount']}")
     st.write(f"**Words:** {rec['words']} Only")
     st.write(f"**Payment:** {rec['pay_type']} - {rec['pay_no']}")
     st.write(f"**Bank:** {rec['bank']} ({rec['date']})")
     st.write(f"**Period:** {rec['month']} {rec['year']}")
+
+# --- INITIALIZATION ---
+if 'all_receipts' not in st.session_state:
+    st.session_state.all_receipts = []
+if 'locked' not in st.session_state:
+    st.session_state.locked = False
+if 'show_batch' not in st.session_state:
+    st.session_state.show_batch = False
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -92,8 +93,7 @@ if st.session_state.locked:
     # Step 1: Period
     c1, c2 = st.columns(2)
     with c1:
-        month_list = ["January", "February", "March", "April", "May", "June", 
-                      "July", "August", "September", "October", "November", "December"]
+        month_list = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
         sel_month = st.selectbox("Select Month", options=month_list)
     with c2:
         sel_year = st.selectbox("Select Year", options=[2025, 2026])
@@ -103,8 +103,7 @@ if st.session_state.locked:
     
     if search_num:
         m_idx = month_list.index(sel_month) + 1
-        result = df[(df['Consumer Number'].astype(str) == search_num) & 
-                    (df['Month'] == m_idx) & (df['Year'] == sel_year)]
+        result = df[(df['Consumer Number'].astype(str) == search_num) & (df['Month'] == m_idx) & (df['Year'] == sel_year)]
 
         if not result.empty:
             row = result.iloc[0]
@@ -138,17 +137,18 @@ if st.session_state.locked:
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
             
-            # Header for table
-            t_head = st.columns([1, 3, 2, 2, 2, 2, 1])
+            # Use small columns for a tighter layout
+            t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
             t_head[0].write("**No.**")
             t_head[1].write("**Consumer**")
             t_head[2].write("**Amount**")
             t_head[3].write("**Mode**")
             t_head[4].write("**Inst. No.**")
             t_head[5].write("**Bank**")
+            t_head[6].write("**Actions**")
             
             for i, rec in enumerate(st.session_state.all_receipts):
-                tcol = st.columns([1, 3, 2, 2, 2, 2, 1])
+                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
                 tcol[0].write(rec['challan'])
                 tcol[1].write(rec['name'])
                 tcol[2].write(f"₹{rec['amount']}")
@@ -156,11 +156,12 @@ if st.session_state.locked:
                 tcol[4].write(rec['pay_no'])
                 tcol[5].write(rec['bank'])
                 
-                # Action Buttons
+                # Smaller Icons using Button Groups
                 with tcol[6]:
-                    if st.button("👁️", key=f"pre_{rec['id']}", help="Preview"): preview_dialog(i)
-                    if st.button("✏️", key=f"edt_{rec['id']}", help="Edit Amount"): edit_amount_dialog(i)
-                    if st.button("🗑️", key=f"del_{rec['id']}", help="Delete"):
+                    sub1, sub2, sub3 = st.columns(3)
+                    if sub1.button("👁️", key=f"p_{rec['id']}", help="Preview"): preview_dialog(i)
+                    if sub2.button("✏️", key=f"e_{rec['id']}", help="Edit"): edit_amount_dialog(i)
+                    if sub3.button("🗑️", key=f"d_{rec['id']}", help="Delete"):
                         st.session_state.all_receipts.pop(i)
                         for j in range(i, len(st.session_state.all_receipts)):
                             st.session_state.all_receipts[j]['challan'] -= 1
