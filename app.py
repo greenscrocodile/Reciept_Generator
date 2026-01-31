@@ -6,7 +6,6 @@ import io
 from datetime import date
 import uuid
 import re
-import mammoth # Converts Docx to HTML for the browser
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
@@ -23,41 +22,37 @@ def format_indian_currency(number):
     if remaining: res = remaining + res
     return f"{res},{last_three}"
 
-# --- DIALOGS ---
-@st.dialog("Document Preview", width="large")
+# --- UPDATED PREVIEW DIALOG (Simple Download Link) ---
+@st.dialog("Document Quick View")
 def preview_dialog(index, tpl_file):
     rec = st.session_state.all_receipts[index]
     
-    # 1. Render a temporary docx with just this one record
+    # Render just this one record into the uploaded template
     doc_bytes = io.BytesIO(tpl_file.getvalue())
     temp_doc = DocxTemplate(doc_bytes)
-    # We wrap the record in a list because the template loop expects an iterable
     temp_doc.render({'receipts': [rec]})
     
-    # 2. Save the rendered doc to memory
+    # Save to memory
     output_io = io.BytesIO()
     temp_doc.save(output_io)
     output_io.seek(0)
     
-    # 3. Convert the Word Doc structure to HTML for the web preview
-    # Mammoth focuses on converting the actual document content accurately
-    result = mammoth.convert_to_html(output_io)
-    html_content = result.value
+    st.write(f"Click the button below to open a temporary version of the Word doc for **{rec['name']}**. This allows you to check the exact alignment in Word.")
     
-    st.info("Below is a real-time preview of your uploaded template with the selected values inserted.")
-    
-    # Display within a styled white box to simulate a page
-    st.markdown(f"""
-        <div style="background-color: white; padding: 40px; border: 1px solid #ddd; color: black; font-family: sans-serif;">
-            {html_content}
-        </div>
-    """, unsafe_allow_html=True)
+    # 5.2: Use download_button for the temporary file
+    st.download_button(
+        label="📂 Open Quick View (.docx)",
+        data=output_io.getvalue(),
+        file_name=f"Preview_{rec['num']}.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
 
+# --- EDIT DIALOG ---
 @st.dialog("Edit Amount")
 def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
     current_val = rec['amount'].replace(",", "")
-    new_amt_str = st.text_input("Enter New Amount ", value=current_val)
+    new_amt_str = st.text_input("New Amount (Numbers only)", value=current_val)
     
     if st.button("Save Changes"):
         try:
@@ -81,8 +76,8 @@ if 'show_batch' not in st.session_state:
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    s_challan = st.text_input("Starting Challan", disabled=st.session_state.locked)
-    s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
+    s_challan = st.text_input("Starting No.", disabled=st.session_state.locked)
+    s_pdate = st.date_input("Payment Date", disabled=st.session_state.locked)
     st.divider()
     tpl_file = st.file_uploader("Upload Template (.docx)", type=["docx"])
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx", "csv"])
@@ -106,10 +101,10 @@ if st.session_state.locked:
     next_no = st.session_state.start_no + curr_count
     
     h1, h2, h3, h4 = st.columns(4)
-    h1.metric("Starting Challan", st.session_state.start_no)
-    h2.metric("Current Challan", next_no)
+    h1.metric("Starting No.", st.session_state.start_no)
+    h2.metric("Next No.", next_no)
     h3.metric("Date", st.session_state.formatted_pdate)
-    h4.metric("Challans Entered", curr_count)
+    h4.metric("Batch", curr_count)
 
     df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
     st.divider()
@@ -140,11 +135,10 @@ if st.session_state.locked:
                 bank_name = st.text_input("Bank Name")
                 f1, f2 = st.columns(2)
                 with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                with f2: inst_no = st.text_input("DD/Cheque No", max_chars=6)
-                inst_date = st.date_input("DD/Cheque Date")
+                with f2: inst_no = st.text_input(f"{mode} No.", max_chars=6)
+                inst_date = st.date_input("Instrument Date")
                 
                 if st.form_submit_button("Add to Batch"):
-                    # Validate Bank Name & Instrument No
                     if re.match(r"^[a-zA-Z\s]+$", bank_name) and re.match(r"^\d{6}$", inst_no):
                         ind_amt = format_indian_currency(amt_val)
                         words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
@@ -157,25 +151,25 @@ if st.session_state.locked:
                         st.session_state.show_batch = False
                         st.rerun()
                     else:
-                        st.error("Invalid Entry: Check Bank Name (no symbols) and Instrument Number (6 digits).")
+                        st.error("Invalid Entry: Check Bank Name and Instrument Number.")
 
     # --- BATCH TABLE ---
     if st.session_state.all_receipts:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
-            t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 2])
+            t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
             t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
             t_head[3].write("**Mode**"); t_head[4].write("**Inst. No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
             
             for i, rec in enumerate(st.session_state.all_receipts):
-                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 2])
+                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
                 tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
                 tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
                 
                 with tcol[6]:
                     s1, s2, s3 = st.columns(3)
-                    # 4. Preview Button passing the actual template file
+                    # Use the download dialog instead of HTML preview
                     if s1.button("👁️", key=f"p_{rec['id']}"): preview_dialog(i, tpl_file)
                     if s2.button("✏️", key=f"e_{rec['id']}"): edit_amount_dialog(i)
                     if s3.button("🗑️", key=f"d_{rec['id']}"):
@@ -190,5 +184,3 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Final Document", output.getvalue(), file_name=fn)
-
-
