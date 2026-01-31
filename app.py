@@ -7,13 +7,11 @@ from datetime import date
 
 st.set_page_config(page_title="Challan Gen", layout="wide")
 
-# --- INDIAN CURRENCY FORMATTING ---
+# --- INDIAN CURRENCY FORMATTING (NO DECIMALS) ---
 def format_indian_currency(number):
-    s = f"{float(number):.2f}"
-    parts = s.split('.')
-    main = parts[0]
-    decimal = parts[1]
-    if len(main) <= 3: return f"{main}.{decimal}"
+    # Convert to integer to drop decimals
+    main = str(int(float(number))) 
+    if len(main) <= 3: return main
     last_three = main[-3:]
     remaining = main[:-3]
     res = ""
@@ -21,7 +19,7 @@ def format_indian_currency(number):
         res = "," + remaining[-2:] + res
         remaining = remaining[:-2]
     if remaining: res = remaining + res
-    return f"{res},{last_three}.{decimal}"
+    return f"{res},{last_three}"
 
 # --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state:
@@ -58,18 +56,21 @@ with st.sidebar:
 st.title("📑 Receipt Generation Workflow")
 
 if st.session_state.locked:
-    # Display Status Header
-    curr_no = st.session_state.start_no + len(st.session_state.all_receipts)
-    h1, h2, h3 = st.columns(3)
-    h1.metric("Starting Challan", st.session_state.start_no)
-    h2.metric("Next Challan No.", curr_no)
+    # 1. UPDATED HEADER: Now includes Current Count
+    curr_count = len(st.session_state.all_receipts)
+    next_no = st.session_state.start_no + curr_count
+    
+    h1, h2, h3, h4 = st.columns(4)
+    h1.metric("Starting No.", st.session_state.start_no)
+    h2.metric("Next Challan No.", next_no)
     h3.metric("Payment Date", st.session_state.formatted_pdate)
+    h4.metric("Current Batch Count", curr_count) # Added current count alongside
 
     df = pd.read_excel(data_file) if "xlsx" in data_file.name else pd.read_csv(data_file)
     
     st.divider()
     
-    # 1. Month and Year Selection
+    # 2. Sequential Workflow
     c1, c2 = st.columns(2)
     with c1:
         month_list = ["January", "February", "March", "April", "May", "June", 
@@ -78,7 +79,6 @@ if st.session_state.locked:
     with c2:
         sel_year = st.selectbox("Select Year", options=[2025, 2026])
 
-    # 2. Consumer Entry (Only shows after Month/Year)
     search_num = st.text_input("Enter Consumer Number")
     
     if search_num:
@@ -90,20 +90,20 @@ if st.session_state.locked:
         if not result.empty:
             row = result.iloc[0]
             amt_val = float(row['Amount'])
+            
+            # Format: Indian commas, No decimals
             ind_amt = format_indian_currency(amt_val)
+            # Words remain accurate based on full value
             words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
             
-            # Display Name and Amount
             st.success(f"**Name:** {row['Name']} | **Amount:** ₹{ind_amt}")
 
-            # 3. Bank and Instrument Details
             with st.form("instrument_details", clear_on_submit=True):
                 bank_name = st.text_input("Bank Name")
                 f1, f2 = st.columns(2)
                 with f1:
                     mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
                 with f2:
-                    # Restricted to 6 numbers
                     inst_no = st.text_input(f"{mode} Number", max_chars=6)
                 
                 inst_date = st.date_input(f"{mode} Date")
@@ -113,7 +113,7 @@ if st.session_state.locked:
                 if submit:
                     if bank_name and inst_no and len(inst_no) == 6:
                         new_rec = {
-                            'challan': curr_no,
+                            'challan': next_no,
                             'pdate': st.session_state.formatted_pdate,
                             'name': row['Name'],
                             'num': row['Consumer Number'],
@@ -127,17 +127,16 @@ if st.session_state.locked:
                             'date': inst_date.strftime("%d.%m.%Y")
                         }
                         st.session_state.all_receipts.append(new_rec)
-                        st.success(f"Added Challan {curr_no} to batch!")
+                        st.success(f"Added Challan {next_no} to batch!")
                         st.rerun()
                     else:
-                        st.error("Please ensure Bank Name is filled and Instrument Number is exactly 6 digits.")
+                        st.error("Fill Bank Name & ensure Instrument Number is exactly 6 digits.")
         else:
-            st.error("No record found for this selection.")
+            st.error("No record found.")
 
     # --- BATCH VIEW & DOWNLOAD ---
     if st.session_state.all_receipts:
         st.divider()
-        # Eye button (Toggle) to show/hide the table
         show_batch = st.checkbox("👁️ View Batch Table")
         if show_batch:
             st.dataframe(pd.DataFrame(st.session_state.all_receipts), use_container_width=True)
