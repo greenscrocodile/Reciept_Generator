@@ -27,7 +27,7 @@ def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
     current_val = int(rec['amount'].replace(",", ""))
     # 1. Removed decimals from the update field
-    new_amt = st.number_input("New Amount (Integer only)", value=current_val, step=1)
+    new_amt = st.number_input("New Amount )", value=current_val)
     if st.button("Save Changes"):
         ind_amt = format_indian_currency(new_amt)
         new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
@@ -174,3 +174,4 @@ if st.session_state.locked:
             doc.save(output)
             fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Now", output.getvalue(), file_name=fn)
+
