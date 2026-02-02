@@ -53,7 +53,7 @@ if 'show_batch' not in st.session_state:
 with st.sidebar:
     st.header("⚙️ Configuration")
     s_challan = st.text_input("Starting Challan", disabled=st.session_state.locked)
-    s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
+    s_pdate = st.date_input("Challan Date", disabled=st.session_state.locked)
     st.divider()
     
     # AUTO-LOAD TEMPLATE FROM GITHUB
@@ -168,5 +168,6 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO()
             doc.save(output)
-            fn = f"receipt_{date.today().strftime('%d_%m_%Y')}.docx"
+            fn = f"Challan_{date.today().strftime('%d_%m_%Y')}.docx"
             st.download_button("📥 Download Final Document", output.getvalue(), file_name=fn)
+
