@@ -10,7 +10,7 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- CUSTOM CSS FOR COMPACT GRID ---
+# --- CUSTOM CSS FOR COMPACT GRID & ALIGNMENT ---
 st.markdown("""
     <style>
     /* Reduce vertical space between image and button */
@@ -21,14 +21,22 @@ st.markdown("""
     div[data-testid="column"] button {
         margin-top: 28px !important;
     }
-    /* Ensure images are centered and square */
+    /* ENFORCE FIXED LOGO SIZE */
     [data-testid="stImage"] img {
+        width: 60px !important;
+        height: 60px !important;
+        object-fit: contain !important;
         border-radius: 5px;
-        object-fit: contain;
         border: 1px solid #eee;
         display: block;
         margin-left: auto;
         margin-right: auto;
+    }
+    /* Centering logic for the logo grid */
+    [data-testid="column"] {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -64,25 +72,41 @@ def format_indian_currency(number):
 @st.dialog("Select Bank", width="large")
 def bank_selection_dialog():
     st.write("### 🏦 Select Bank")
-    # Use gap="small" to bring columns closer
     cols = st.columns(6, gap="small")
     for i, bank in enumerate(BANKS):
         with cols[i % 6]:
-            # 1. Display Logo (Limited to 80px)
             if os.path.exists(bank['file']):
-                st.image(bank['file'], width=80)
+                st.image(bank['file'])
             else:
                 st.caption(bank['name'])
             
-            # 2. Selection Button (Width matches logo container)
-            if st.button("Select", key=f"btn_{i}", use_container_width=True):
+            # SMALLER BUTTON WIDTH
+            if st.button("Pick", key=f"btn_{i}", use_container_width=False):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
+
+@st.dialog("Edit Amount")
+def edit_amount_dialog(index):
+    rec = st.session_state.all_receipts[index]
+    current_val = rec['amount'].replace(",", "")
+    new_amt_str = st.text_input("Enter New Amount ", value=current_val)
+
+    if st.button("Save Changes"):
+        try:
+            new_amt = int(new_amt_str)
+            ind_amt = format_indian_currency(new_amt)
+            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title() + " Only"
+            st.session_state.all_receipts[index]['amount'] = ind_amt
+            st.session_state.all_receipts[index]['words'] = new_words
+            st.rerun()
+        except ValueError:
+            st.error("Please enter a valid whole number.")
 
 # --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state: st.session_state.all_receipts = []
 if 'locked' not in st.session_state: st.session_state.locked = False
 if 'selected_bank' not in st.session_state: st.session_state.selected_bank = ""
+if 'show_batch' not in st.session_state: st.session_state.show_batch = False
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -115,7 +139,6 @@ with st.sidebar:
 
 # --- MAIN FLOW ---
 if st.session_state.locked:
-    # INFO METRICS AT TOP
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
 
@@ -152,12 +175,11 @@ if st.session_state.locked:
                 if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
-                    # ALIGNED BANK INPUT SECTION
                     b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
                     with b_col1:
                         bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank, placeholder="Type bank or use Select")
                     with b_col2:
-                        if st.button("🔍 Select", help="Open Bank Gallery"):
+                        if st.button("🔍 Select"):
                             bank_selection_dialog()
 
                     with st.form("entry_form", clear_on_submit=True):
@@ -181,22 +203,32 @@ if st.session_state.locked:
                             else:
                                 st.error("Check Bank Name and 6-digit No.")
 
-    # BATCH TABLE
+    # --- BATCH TABLE ---
     if st.session_state.all_receipts:
         st.divider()
-        if st.checkbox("👁️ View Batch Table"):
+        if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
+            st.session_state.show_batch = True
+            # REFINED COLUMN RATIOS FOR BETTER ALIGNMENT
+            t_head = st.columns([0.7, 2.5, 1.5, 1.2, 1.2, 1.8, 1.1])
+            t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
+            t_head[3].write("**Mode**"); t_head[4].write("**No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
+
             for i, rec in enumerate(st.session_state.all_receipts):
-                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 0.5])
+                tcol = st.columns([0.7, 2.5, 1.5, 1.2, 1.2, 1.8, 1.1])
                 tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
                 tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
-                if tcol[6].button("🗑️", key=f"d_{rec['id']}"):
-                    st.session_state.all_receipts.pop(i)
-                    for j in range(i, len(st.session_state.all_receipts)):
-                        st.session_state.all_receipts[j]['challan'] -= 1
-                    st.rerun()
+                
+                with tcol[6]:
+                    s1, s2 = st.columns(2)
+                    if s1.button("✏️", key=f"e_{rec['id']}"): edit_amount_dialog(i)
+                    if s2.button("🗑️", key=f"d_{rec['id']}"):
+                        st.session_state.all_receipts.pop(i)
+                        for j in range(i, len(st.session_state.all_receipts)):
+                            st.session_state.all_receipts[j]['challan'] -= 1
+                        st.rerun()
 
         if st.button("🚀 Finalize Word File", type="primary"):
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
-            st.download_button("📥 Download Now", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+            st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
