@@ -10,34 +10,25 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- CUSTOM CSS FOR COMPACT UI & LOGO LIMITS ---
+# --- CUSTOM CSS FOR COMPACT UI ---
 st.markdown("""
     <style>
     /* Nudge button to align with text input bottom */
     div[data-testid="column"] button {
         margin-top: 28px !important;
     }
-    /* Force logos to be square and limited in size */
-    [data-testid="stImage"] img {
-        border: 1px solid #ddd;
-        border-radius: 8px;
+    /* Make logos square and uniform */
+    img {
+        border-radius: 5px;
         object-fit: contain;
-        max-width: 80px !important;
-        max-height: 80px !important;
-        background-color: white;
-    }
-    /* Center the logos in the grid */
-    [data-testid="stVerticalBlock"] > div {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- BANK LOGOS CONFIGURATION ---
+# Assuming these files exist in your GitHub root folder
 BANKS = [
-    {"name": "State Bank of India", "file": "SBI.png"},
+    {"name": "State Bank of India", "file": "logos/SBI.jpg"},
     {"name": "HDFC Bank", "file": "HDFC.png"},
     {"name": "ICICI Bank", "file": "ICICI.png"},
     {"name": "Axis Bank", "file": "AXIS.png"},
@@ -45,7 +36,7 @@ BANKS = [
     {"name": "Canara Bank", "file": "CANARA.png"},
     {"name": "Bank of Baroda", "file": "BOB.png"},
     {"name": "Union Bank", "file": "UNION.png"},
-    # The grid will automatically expand as you add more
+    # Add more here as you upload them to Git
 ]
 
 # --- UTILITY FUNCTIONS ---
@@ -66,18 +57,15 @@ def format_indian_currency(number):
 # --- DIALOGS ---
 @st.dialog("Select Bank", width="large")
 def bank_selection_dialog():
-    st.write("### 🏦 Bank Gallery")
-    # 6-column grid for the 6x6 layout
+    st.write("Click a logo to select:")
+    # Create a 6-column grid
     cols = st.columns(6)
     for i, bank in enumerate(BANKS):
         with cols[i % 6]:
-            # Display image with strict width limit
+            # Display image if it exists, else show name
             if os.path.exists(bank['file']):
-                st.image(bank['file'], width=80)
-            else:
-                st.info("No Logo")
+                st.image(bank['file'], use_container_width=True)
             
-            # Compact select button
             if st.button("Select", key=f"btn_{i}", use_container_width=True):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
@@ -155,12 +143,13 @@ if st.session_state.locked:
                 if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
-                    # ALIGNED BANK INPUT SECTION
-                    b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
+                    # ALIGNED BANK INPUT SECTION (Narrower Select Button)
+                    # Using [0.9, 0.1] to reduce button width significantly
+                    b_col1, b_col2 = st.columns([0.8, 0.2], vertical_alignment="bottom")
                     with b_col1:
                         bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
                     with b_col2:
-                        if st.button("🔍", help="Open Bank Gallery"):
+                        if st.button("🔍 Select", use_container_width=True, help="Open Bank Gallery"):
                             bank_selection_dialog()
 
                     with st.form("entry_form", clear_on_submit=True):
@@ -203,3 +192,10 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
+
+
+
+
+
+
