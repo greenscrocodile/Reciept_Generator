@@ -10,54 +10,39 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- CUSTOM CSS FOR COMPACT GRID & ALIGNMENT ---
+# --- CUSTOM CSS FOR COMPACT GRID ---
 st.markdown("""
     <style>
-    /* Nudge top configuration button */
+    /* Reduce vertical space between image and button */
+    [data-testid="stVerticalBlock"] > div {
+        gap: 0rem !important;
+    }
+    /* Align Select button with text input bottom */
     div[data-testid="column"] button {
         margin-top: 28px !important;
     }
-    
-    /* Strict Logo Sizing */
+    /* Ensure images are centered and square */
     [data-testid="stImage"] img {
-        border-radius: 5px 5px 0 0; /* Round top corners only */
-        border: 1px solid #ddd;
+        border-radius: 5px;
         object-fit: contain;
-        width: 80px !important;
-        height: 80px !important;
-        background-color: white;
-    }
-
-    /* Make button match logo width and sit flush underneath */
-    .stButton > button {
-        width: 80px !important;
-        border-radius: 0 0 5px 5px !important; /* Round bottom corners only */
-        padding: 0px !important;
-        font-size: 10px !important;
-        height: 25px !important;
-        min-height: 25px !important;
-    }
-
-    /* Reduce vertical gap between image and button */
-    [data-testid="stVerticalBlock"] > div {
-        gap: 0rem !important;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        border: 1px solid #eee;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- BANK LOGOS CONFIGURATION ---
 BANKS = [
-    {"name": "SBI", "file": "logos/SBI.jpg"},
-    {"name": "HDFC", "file": "HDFC.png"},
-    {"name": "ICICI", "file": "ICICI.png"},
-    {"name": "AXIS", "file": "AXIS.png"},
-    {"name": "INDIAN", "file": "INDIAN.png"},
-    {"name": "CANARA", "file": "CANARA.png"},
-    {"name": "BOB", "file": "BOB.png"},
-    {"name": "UNION", "file": "UNION.png"},
+    {"name": "State Bank of India", "file": "logos/SBI.jpg"},
+    {"name": "HDFC Bank", "file": "HDFC.png"},
+    {"name": "ICICI Bank", "file": "ICICI.png"},
+    {"name": "Axis Bank", "file": "AXIS.png"},
+    {"name": "Indian Bank", "file": "INDIAN.png"},
+    {"name": "Canara Bank", "file": "CANARA.png"},
+    {"name": "Bank of Baroda", "file": "BOB.png"},
+    {"name": "Union Bank", "file": "UNION.png"},
 ]
 
 # --- UTILITY FUNCTIONS ---
@@ -79,17 +64,18 @@ def format_indian_currency(number):
 @st.dialog("Select Bank", width="large")
 def bank_selection_dialog():
     st.write("### 🏦 Select Bank")
-    # Use 'small' gap to reduce horizontal space between logos
+    # Use gap="small" to bring columns closer
     cols = st.columns(6, gap="small")
     for i, bank in enumerate(BANKS):
         with cols[i % 6]:
+            # 1. Display Logo (Limited to 80px)
             if os.path.exists(bank['file']):
                 st.image(bank['file'], width=80)
             else:
                 st.caption(bank['name'])
             
-            # Button is now styled via CSS to be exactly 80px
-            if st.button("Select", key=f"btn_{i}"):
+            # 2. Selection Button (Width matches logo container)
+            if st.button("Select", key=f"btn_{i}", use_container_width=True):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
 
@@ -129,14 +115,14 @@ with st.sidebar:
 
 # --- MAIN FLOW ---
 if st.session_state.locked:
-    # INFO METRICS
+    # INFO METRICS AT TOP
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("First Challan", st.session_state.start_no)
     m2.metric("Current No.", next_no)
-    m3.metric("Challan Date", st.session_state.formatted_pdate)
+    m3.metric("Date", st.session_state.formatted_pdate)
     m4.metric("Entered", curr_count)
 
     try:
@@ -169,9 +155,9 @@ if st.session_state.locked:
                     # ALIGNED BANK INPUT SECTION
                     b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
                     with b_col1:
-                        bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
+                        bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank, placeholder="Type bank or use Select")
                     with b_col2:
-                        if st.button("🔍", help="Open Bank Gallery"):
+                        if st.button("🔍 Select", help="Open Bank Gallery"):
                             bank_selection_dialog()
 
                     with st.form("entry_form", clear_on_submit=True):
@@ -213,4 +199,4 @@ if st.session_state.locked:
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
-            st.download_button("📥 Download Document", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+            st.download_button("📥 Download Now", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
