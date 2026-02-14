@@ -10,28 +10,35 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- CUSTOM CSS FOR COMPACT UI & LOGO SIZE LIMITS ---
+# --- CUSTOM CSS FOR CLICKABLE LOGO FEEL ---
 st.markdown("""
     <style>
     /* Nudge button to align with text input bottom */
     div[data-testid="column"] button {
         margin-top: 28px !important;
     }
-    /* Force logos to be square and limited in size */
+    /* Logo Styling */
     [data-testid="stImage"] img {
         border-radius: 8px;
         object-fit: contain;
         max-width: 80px !important;
         max-height: 80px !important;
-        background-color: #f9f9f9;
-        border: 1px solid #eee;
+        background-color: #ffffff;
+        border: 2px solid #eee;
+        transition: transform 0.2s, border-color 0.2s;
+        cursor: pointer;
     }
-    /* Centering content in the logo grid */
+    /* Hover effect to show it is clickable */
+    [data-testid="stImage"] img:hover {
+        transform: scale(1.05);
+        border-color: #FF4B4B;
+    }
+    /* Center the columns */
     [data-testid="column"] {
         display: flex;
         flex-direction: column;
         align-items: center;
-        text-align: center;
+        justify-content: center;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -66,19 +73,20 @@ def format_indian_currency(number):
 # --- DIALOGS ---
 @st.dialog("Select Bank", width="large")
 def bank_selection_dialog():
-    st.write("### 🏦 Bank Gallery")
-    st.write("Click a logo to select:")
-    # Create a 6-column grid as requested (6x6 layout potential)
+    st.write("### 🏦 Select Your Bank")
+    st.caption("Click on any logo to auto-fill the form.")
+    
+    # 6-column grid
     cols = st.columns(6)
     for i, bank in enumerate(BANKS):
         with cols[i % 6]:
-            # Display image with strict width limit (80 pixels)
+            # Use a button with the bank name as a label to act as the clickable area
+            # The image is displayed right above it
             if os.path.exists(bank['file']):
                 st.image(bank['file'], width=80)
-            else:
-                st.write("No Logo")
             
-            if st.button("Select", key=f"btn_{i}", use_container_width=True):
+            # This button now acts as the trigger for the image above it
+            if st.button(bank['name'], key=f"btn_{i}", use_container_width=True):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
 
@@ -154,11 +162,11 @@ if st.session_state.locked:
                 if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
-                    b_col1, b_col2 = st.columns([0.8, 0.2], vertical_alignment="bottom")
+                    b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
                     with b_col1:
                         bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
                     with b_col2:
-                        if st.button("🔍 Select", use_container_width=True, help="Open Bank Gallery"):
+                        if st.button("🔍 Select", use_container_width=True):
                             bank_selection_dialog()
 
                     with st.form("entry_form", clear_on_submit=True):
