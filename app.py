@@ -28,7 +28,7 @@ st.markdown("""
 # --- BANK LOGOS CONFIGURATION ---
 # Assuming these files exist in your GitHub root folder
 BANKS = [
-    {"name": "State Bank of India", "file": "SBI.png"},
+    {"name": "State Bank of India", "file": "logos/SBI.png"},
     {"name": "HDFC Bank", "file": "HDFC.png"},
     {"name": "ICICI Bank", "file": "ICICI.png"},
     {"name": "Axis Bank", "file": "AXIS.png"},
@@ -192,6 +192,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
