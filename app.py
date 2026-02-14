@@ -10,49 +10,54 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- CUSTOM CSS FOR CLICKABLE LOGOS ---
+# --- CUSTOM CSS FOR COMPACT GRID & ALIGNMENT ---
 st.markdown("""
     <style>
-    /* Nudge button to align with text input bottom */
+    /* Nudge top configuration button */
     div[data-testid="column"] button {
         margin-top: 28px !important;
     }
-    /* Logo Styling to look like buttons */
+    
+    /* Strict Logo Sizing */
     [data-testid="stImage"] img {
-        border-radius: 10px;
-        border: 2px solid #f0f2f6;
-        transition: all 0.3s ease;
-        cursor: pointer;
-        max-width: 80px !important;
-        margin-bottom: -40px; /* Pull the image into the button space */
+        border-radius: 5px 5px 0 0; /* Round top corners only */
+        border: 1px solid #ddd;
+        object-fit: contain;
+        width: 80px !important;
+        height: 80px !important;
+        background-color: white;
     }
-    [data-testid="stImage"] img:hover {
-        border-color: #ff4b4b;
-        transform: scale(1.05);
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+
+    /* Make button match logo width and sit flush underneath */
+    .stButton > button {
+        width: 80px !important;
+        border-radius: 0 0 5px 5px !important; /* Round bottom corners only */
+        padding: 0px !important;
+        font-size: 10px !important;
+        height: 25px !important;
+        min-height: 25px !important;
     }
-    /* Style the selection button to be invisible but cover the area */
-    .bank-btn button {
-        background-color: transparent !important;
-        color: transparent !important;
-        border: none !important;
-        height: 100px !important;
-        width: 100% !important;
-        z-index: 10;
+
+    /* Reduce vertical gap between image and button */
+    [data-testid="stVerticalBlock"] > div {
+        gap: 0rem !important;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- BANK LOGOS CONFIGURATION ---
 BANKS = [
-    {"name": "State Bank of India", "file": "logos/SBI.jpg"},
-    {"name": "HDFC Bank", "file": "HDFC.png"},
-    {"name": "ICICI Bank", "file": "ICICI.png"},
-    {"name": "Axis Bank", "file": "AXIS.png"},
-    {"name": "Indian Bank", "file": "INDIAN.png"},
-    {"name": "Canara Bank", "file": "CANARA.png"},
-    {"name": "Bank of Baroda", "file": "BOB.png"},
-    {"name": "Union Bank", "file": "UNION.png"},
+    {"name": "SBI", "file": "logos/SBI.jpg"},
+    {"name": "HDFC", "file": "HDFC.png"},
+    {"name": "ICICI", "file": "ICICI.png"},
+    {"name": "AXIS", "file": "AXIS.png"},
+    {"name": "INDIAN", "file": "INDIAN.png"},
+    {"name": "CANARA", "file": "CANARA.png"},
+    {"name": "BOB", "file": "BOB.png"},
+    {"name": "UNION", "file": "UNION.png"},
 ]
 
 # --- UTILITY FUNCTIONS ---
@@ -73,22 +78,18 @@ def format_indian_currency(number):
 # --- DIALOGS ---
 @st.dialog("Select Bank", width="large")
 def bank_selection_dialog():
-    st.write("### 🏦 Choose a Bank")
-    st.caption("Click on the bank logo to select it.")
-    
-    # Create a 6-column grid
-    cols = st.columns(6)
+    st.write("### 🏦 Select Bank")
+    # Use 'small' gap to reduce horizontal space between logos
+    cols = st.columns(6, gap="small")
     for i, bank in enumerate(BANKS):
         with cols[i % 6]:
-            # Show the Image
             if os.path.exists(bank['file']):
                 st.image(bank['file'], width=80)
             else:
-                st.write(f"🚫 {bank['name']}")
+                st.caption(bank['name'])
             
-            # The button underneath acts as the trigger. 
-            # We style it to look like it belongs to the logo.
-            if st.button(bank['name'], key=f"btn_{i}", use_container_width=True):
+            # Button is now styled via CSS to be exactly 80px
+            if st.button("Select", key=f"btn_{i}"):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
 
@@ -128,7 +129,7 @@ with st.sidebar:
 
 # --- MAIN FLOW ---
 if st.session_state.locked:
-    # INFO AT THE TOP
+    # INFO METRICS
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
 
@@ -166,11 +167,11 @@ if st.session_state.locked:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
                     # ALIGNED BANK INPUT SECTION
-                    b_col1, b_col2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
+                    b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
                     with b_col1:
-                        bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank, placeholder="Manual entry or click 🔍 to select")
+                        bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
                     with b_col2:
-                        if st.button("🔍", help="Open Bank Gallery", use_container_width=True):
+                        if st.button("🔍", help="Open Bank Gallery"):
                             bank_selection_dialog()
 
                     with st.form("entry_form", clear_on_submit=True):
@@ -212,4 +213,4 @@ if st.session_state.locked:
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
-            st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+            st.download_button("📥 Download Document", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
