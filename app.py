@@ -52,10 +52,6 @@ if 'locked' not in st.session_state:
 if 'show_batch' not in st.session_state:
     st.session_state.show_batch = False
 
-# --- BANK NAME SESSION STATE ---
-if "bank_name_value" not in st.session_state:
-    st.session_state.bank_name_value = ""
-
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuration")
@@ -114,8 +110,9 @@ if st.session_state.locked:
     with c2:
         sel_year = st.selectbox("Select Year", options=[2025, 2026])
 
+    # Construct the search pattern
     m_idx = month_list.index(sel_month)
-    target_abbr = f"{month_abbr[m_idx]}-{str(sel_year)[2:]}"
+    target_abbr = f"{month_abbr[m_idx]}-{str(sel_year)[2:]}" # e.g. Jul-25
 
     search_num = st.text_input("Enter Consumer Number", max_chars=3)
 
@@ -127,12 +124,15 @@ if st.session_state.locked:
 
             if not result.empty:
                 row = result.iloc[0]
-
+                
+                # Logic to find the column even if it's a datetime object
                 target_col = None
                 for col in df.columns:
+                    # Case 1: Column name is a string match "Jul-25"
                     if str(col) == target_abbr:
                         target_col = col
                         break
+                    # Case 2: Column name is a datetime object matching the month and year
                     if isinstance(col, (datetime, pd.Timestamp)):
                         if col.month == (m_idx + 1) and col.year == sel_year:
                             target_col = col
@@ -146,73 +146,23 @@ if st.session_state.locked:
                     else:
                         st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
-                        # ----------- DYNAMIC BANK NAME SUGGESTIONS -----------
-                        BANK_LIST = [
-                            "State Bank of India",
-                            "Indian Bank",
-                            "Indian Overseas Bank",
-                            "Canara Bank",
-                            "HDFC Bank",
-                            "ICICI Bank",
-                            "Axis Bank",
-                            "Punjab National Bank",
-                            "Union Bank of India",
-                            "Bank of Baroda"
-                        ]
-
-                        bank_name = st.text_input(
-                            "Bank Name",
-                            key="bank_name_value"
-                        )
-
-                        if bank_name:
-                            filtered_banks = [
-                                b for b in BANK_LIST
-                                if bank_name.lower() in b.lower()
-                            ]
-                        else:
-                            filtered_banks = BANK_LIST
-
-                        if filtered_banks:
-                            cols = st.columns(min(3, len(filtered_banks[:6])))
-                            for i, bank in enumerate(filtered_banks[:6]):
-                                if cols[i % len(cols)].button(bank, key=f"sugg_{bank}"):
-                                    st.session_state.bank_name_value = bank
-                                    st.rerun()
-                        # -----------------------------------------------------
-
                         with st.form("entry_form", clear_on_submit=True):
-
+                            bank_name = st.text_input("Bank Name")
                             f1, f2 = st.columns(2)
-                            with f1:
-                                mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                            with f2:
-                                inst_no = st.text_input("No.", max_chars=6)
-
+                            with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
+                            with f2: inst_no = st.text_input("No.", max_chars=6)
                             inst_date = st.date_input("Date")
 
                             if st.form_submit_button("Add to Batch"):
-                                if re.match(r"^[a-zA-Z\s]+$", st.session_state.bank_name_value) and re.match(r"^\d{6}$", inst_no):
+                                if re.match(r"^[a-zA-Z\s]+$", bank_name) and re.match(r"^\d{6}$", inst_no):
                                     ind_amt = format_indian_currency(amt_val)
                                     words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
                                     
                                     st.session_state.all_receipts.append({
-                                        'id': str(uuid.uuid4()),
-                                        'challan': next_no,
-                                        'pdate': st.session_state.formatted_pdate,
-                                        'name': row['Name'],
-                                        'num': row['Consumer Number'],
-                                        'month': sel_month,
-                                        'year': sel_year,
-                                        'amount': ind_amt,
-                                        'words': words,
-                                        'pay_type': mode,
-                                        'pay_no': inst_no,
-                                        'bank': st.session_state.bank_name_value,
-                                        'date': inst_date.strftime("%d.%m.%Y")
+                                        'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
+                                        'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
+                                        'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
                                     })
-
-                                    st.session_state.bank_name_value = ""
                                     st.rerun()
                                 else:
                                     st.error("Check Bank Name and 6-digit No.")
@@ -227,31 +177,20 @@ if st.session_state.locked:
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
             st.session_state.show_batch = True
             t_head = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
-            t_head[0].write("**No.**")
-            t_head[1].write("**Consumer**")
-            t_head[2].write("**Amount**")
-            t_head[3].write("**Mode**")
-            t_head[4].write("**No.**")
-            t_head[5].write("**Bank**")
-            t_head[6].write("**Actions**")
+            t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
+            t_head[3].write("**Mode**"); t_head[4].write("**No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
 
             for i, rec in enumerate(st.session_state.all_receipts):
                 tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
-                tcol[0].write(rec['challan'])
-                tcol[1].write(rec['name'])
-                tcol[2].write(f"₹{rec['amount']}")
-                tcol[3].write(rec['pay_type'])
-                tcol[4].write(rec['pay_no'])
-                tcol[5].write(rec['bank'])
+                tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
+                tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
 
                 with tcol[6]:
                     s1, s2 = st.columns(2)
-                    if s1.button("✏️", key=f"e_{rec['id']}"):
-                        edit_amount_dialog(i)
+                    if s1.button("✏️", key=f"e_{rec['id']}"): edit_amount_dialog(i)
                     if s2.button("🗑️", key=f"d_{rec['id']}"):
                         st.session_state.all_receipts.pop(i)
-                        for j in range(i, len(st.session_state.all_receipts)):
-                            st.session_state.all_receipts[j]['challan'] -= 1
+                        for j in range(i, len(st.session_state.all_receipts)): st.session_state.all_receipts[j]['challan'] -= 1
                         st.rerun()
 
         if st.button("🚀 Generate Final Word File", type="primary"):
@@ -259,8 +198,4 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO()
             doc.save(output)
-            st.download_button(
-                "📥 Download Document",
-                output.getvalue(),
-                file_name=f"Challans_{date.today()}.docx"
-            )
+            st.download_button("📥 Download Document", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
