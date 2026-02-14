@@ -44,7 +44,7 @@ st.markdown("""
 # --- BANK LOGOS CONFIGURATION ---
 BANKS = [
     {"name": "State Bank of India", "file": "logos/SBI.jpg"},
-    {"name": "HDFC Bank", "file": "logos/HDFC.png"},
+    {"name": "HDFC Bank", "file": "logos/HDFC.jpg"},
     {"name": "ICICI Bank", "file": "logos/SBI.jpg"},
     {"name": "Axis Bank", "file": "logos/SBI.jpg"},
     {"name": "Indian Bank", "file": "logos/SBI.jpg"},
@@ -232,5 +232,6 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
