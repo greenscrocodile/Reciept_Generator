@@ -149,7 +149,7 @@ if st.session_state.locked:
                     with b_col1:
                         bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
                     with b_col2:
-                        if st.button("🔍", help="Open Bank Gallery"):
+                        if st.button("🔍 Select", help="Open Bank Gallery"):
                             bank_selection_dialog()
 
                     with st.form("entry_form", clear_on_submit=True):
@@ -192,6 +192,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
