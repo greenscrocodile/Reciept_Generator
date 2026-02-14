@@ -52,9 +52,9 @@ if 'locked' not in st.session_state:
 if 'show_batch' not in st.session_state:
     st.session_state.show_batch = False
 
-# --- BANK INPUT SESSION STATE (FOR DATALIST) ---
-if "bank_input" not in st.session_state:
-    st.session_state.bank_input = ""
+# --- BANK NAME SESSION STATE ---
+if "bank_name_value" not in st.session_state:
+    st.session_state.bank_name_value = ""
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -146,49 +146,53 @@ if st.session_state.locked:
                     else:
                         st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
+                        # ----------- DYNAMIC BANK NAME SUGGESTIONS -----------
+                        BANK_LIST = [
+                            "State Bank of India",
+                            "Indian Bank",
+                            "Indian Overseas Bank",
+                            "Canara Bank",
+                            "HDFC Bank",
+                            "ICICI Bank",
+                            "Axis Bank",
+                            "Punjab National Bank",
+                            "Union Bank of India",
+                            "Bank of Baroda"
+                        ]
+
+                        bank_name = st.text_input(
+                            "Bank Name",
+                            key="bank_name_value"
+                        )
+
+                        if bank_name:
+                            filtered_banks = [
+                                b for b in BANK_LIST
+                                if bank_name.lower() in b.lower()
+                            ]
+                        else:
+                            filtered_banks = BANK_LIST
+
+                        if filtered_banks:
+                            cols = st.columns(min(3, len(filtered_banks[:6])))
+                            for i, bank in enumerate(filtered_banks[:6]):
+                                if cols[i % len(cols)].button(bank, key=f"sugg_{bank}"):
+                                    st.session_state.bank_name_value = bank
+                                    st.rerun()
+                        # -----------------------------------------------------
+
                         with st.form("entry_form", clear_on_submit=True):
 
-                            # ---------------- BANK NAME DATALIST ----------------
-                            BANK_LIST = [
-                                "State Bank of India",
-                                "Indian Bank",
-                                "Indian Overseas Bank",
-                                "Canara Bank",
-                                "HDFC Bank",
-                                "ICICI Bank",
-                                "Axis Bank",
-                                "Punjab National Bank",
-                                "Union Bank of India",
-                                "Bank of Baroda"
-                            ]
-
-                            bank_name = st.text_input(
-                                "Bank Name",
-                                value=st.session_state.bank_input,
-                                key="bank_text"
-                            )
-
-                            if bank_name:
-                                suggestions = [
-                                    b for b in BANK_LIST
-                                    if bank_name.lower() in b.lower()
-                                ]
-                            else:
-                                suggestions = BANK_LIST
-
-                            for s in suggestions[:5]:
-                                if st.form_submit_button(s):
-                                    st.session_state.bank_input = s
-                                    st.rerun()
-                            # ------------------------------------------------------
-
                             f1, f2 = st.columns(2)
-                            with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                            with f2: inst_no = st.text_input("No.", max_chars=6)
+                            with f1:
+                                mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
+                            with f2:
+                                inst_no = st.text_input("No.", max_chars=6)
+
                             inst_date = st.date_input("Date")
 
                             if st.form_submit_button("Add to Batch"):
-                                if re.match(r"^[a-zA-Z\s]+$", bank_name) and re.match(r"^\d{6}$", inst_no):
+                                if re.match(r"^[a-zA-Z\s]+$", st.session_state.bank_name_value) and re.match(r"^\d{6}$", inst_no):
                                     ind_amt = format_indian_currency(amt_val)
                                     words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
                                     
@@ -204,10 +208,11 @@ if st.session_state.locked:
                                         'words': words,
                                         'pay_type': mode,
                                         'pay_no': inst_no,
-                                        'bank': bank_name,
+                                        'bank': st.session_state.bank_name_value,
                                         'date': inst_date.strftime("%d.%m.%Y")
                                     })
-                                    st.session_state.bank_input = ""
+
+                                    st.session_state.bank_name_value = ""
                                     st.rerun()
                                 else:
                                     st.error("Check Bank Name and 6-digit No.")
@@ -216,6 +221,7 @@ if st.session_state.locked:
             else:
                 st.error("Consumer Number not found.")
 
+    # --- BATCH TABLE ---
     if st.session_state.all_receipts:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
