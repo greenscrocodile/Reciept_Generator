@@ -8,7 +8,7 @@ import uuid
 import re
 import os
 
-# --- EXTENSIVE LIST OF INDIAN BANKS ---
+# --- MASTER BANK LIST ---
 INDIAN_BANKS = [
     "State Bank of India", "Indian Bank", "Indian Overseas Bank", "Canara Bank", 
     "Bank of Baroda", "Punjab National Bank", "Union Bank of India", "HDFC Bank", 
@@ -44,14 +44,11 @@ with st.sidebar:
     s_challan = st.text_input("Starting Challan", disabled=st.session_state.locked)
     s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
     st.divider()
-    
     TEMPLATE_NAME = "Test.docx"
     if os.path.exists(TEMPLATE_NAME):
         with open(TEMPLATE_NAME, "rb") as f: template_bytes = f.read()
     else: template_bytes = None
-
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx"])
-
     if not st.session_state.locked:
         if st.button("Confirm Setup", type="primary"):
             if s_challan and template_bytes and data_file:
@@ -100,34 +97,30 @@ if st.session_state.locked:
                 if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
                     
-                    # --- DYNAMIC AUTOCOMPLETE LOGIC ---
-                    bank_query = st.text_input("Bank Name", key="bank_field", help="Type any bank name. Suggestions appear below.")
+                    # --- DYNAMIC TEXT BOX WITH LIMITED SUGGESTIONS ---
+                    current_bank = st.text_input("Bank Name", key="bank_field")
                     
-                    # Filter suggestions based on input
-                    if bank_query:
-                        suggestions = [b for b in INDIAN_BANKS if bank_query.lower() in b.lower()]
-                        # Limit to 5 suggestions
-                        limited_suggestions = suggestions[:5]
-                        
-                        if limited_suggestions:
-                            cols = st.columns(len(limited_suggestions))
-                            for idx, suggestion in enumerate(limited_suggestions):
-                                if cols[idx].button(suggestion, key=f"sug_{idx}"):
-                                    # This is a workaround to update the text field with the button click
-                                    st.info(f"Selected: {suggestion}. Please proceed to fill payment details.")
-                                    st.session_state['selected_bank'] = suggestion
-                    
+                    if current_bank:
+                        # Filter and limit to exactly 5 suggestions
+                        suggestions = [b for b in INDIAN_BANKS if current_bank.lower() in b.lower()][:5]
+                        if suggestions:
+                            st.write("Suggestions (Click to apply):")
+                            cols = st.columns(5) # Five buttons side-by-side
+                            for i, s in enumerate(suggestions):
+                                if cols[i].button(s, key=f"sug_{i}"):
+                                    # This is a conceptual trigger; for a form we use the text_input value
+                                    st.info(f"Selected: {s}. Please re-type or confirm below.")
+
                     with st.form("entry_form", clear_on_submit=True):
-                        # The form uses either the button-selected bank or the typed text
+                        # Re-verify the name here for the form submission
+                        final_bank = st.text_input("Confirm/Final Bank Name", value=current_bank)
+                        
                         f1, f2 = st.columns(2)
                         with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
                         with f2: inst_no = st.text_input("No.", max_chars=6)
                         inst_date = st.date_input("Date")
                         
                         if st.form_submit_button("Add to Batch"):
-                            # Logic: Priority to the suggestion button, else use the raw text input
-                            final_bank = st.session_state.get('selected_bank', bank_query)
-                            
                             if final_bank and re.match(r"^\d{6}$", inst_no):
                                 ind_amt = format_indian_currency(amt_val)
                                 words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
@@ -136,7 +129,5 @@ if st.session_state.locked:
                                     'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
                                     'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': final_bank, 'date': inst_date.strftime("%d.%m.%Y")
                                 })
-                                # Clear temporary selection for next entry
-                                if 'selected_bank' in st.session_state: del st.session_state['selected_bank']
                                 st.rerun()
-                            else: st.error("Please ensure Bank Name is entered and Instrument No. is 6 digits.")
+                            else: st.error("Invalid Entry: Check Bank Name and 6-digit No.")
