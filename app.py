@@ -10,9 +10,16 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
+# --- CUSTOM CSS FOR BUTTON ALIGNMENT ---
+st.markdown("""
+    <style>
+    div[data-testid="column"] button {
+        margin-top: 28px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- BANK LOGOS / DATA ---
-# You can replace these with actual image URLs or local paths later.
-# For now, we use text-based buttons to demonstrate the logic.
 BANKS = [
     {"name": "State Bank of India", "logo": "🏦"},
     {"name": "HDFC Bank", "logo": "🏢"},
@@ -42,11 +49,11 @@ def format_indian_currency(number):
 # --- DIALOGS ---
 @st.dialog("Select Bank")
 def bank_selection_dialog():
-    st.write("Click on a bank to auto-fill the form:")
-    cols = st.columns(4) # Grid layout for logos
+    st.write("Click a bank to auto-fill:")
+    cols = st.columns(4)
     for i, bank in enumerate(BANKS):
         with cols[i % 4]:
-            if st.button(f"{bank['logo']}\n{bank['name']}", key=f"bank_{i}"):
+            if st.button(f"{bank['logo']} {bank['name']}", key=f"bank_{i}"):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
 
@@ -76,9 +83,11 @@ with st.sidebar:
     st.divider()
     
     TEMPLATE_NAME = "Test.docx"
+    template_bytes = None
     if os.path.exists(TEMPLATE_NAME):
+        st.success(f"✅ Template loaded")
         with open(TEMPLATE_NAME, "rb") as f: template_bytes = f.read()
-    else: template_bytes = None
+    else: st.error(f"❌ {TEMPLATE_NAME} missing!")
 
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx"])
 
@@ -97,9 +106,15 @@ with st.sidebar:
 
 # --- MAIN FLOW ---
 if st.session_state.locked:
+    # --- INFO AT THE TOP (METRICS) ---
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
-    st.columns(4)[1].metric("Current Challan", next_no)
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("First Challan", st.session_state.start_no)
+    m2.metric("Current Challan No.", next_no)
+    m3.metric("Challan Date", st.session_state.formatted_pdate)
+    m4.metric("Entered Challans", curr_count)
 
     try:
         df = pd.read_excel(data_file, sheet_name="BILL")
@@ -119,47 +134,44 @@ if st.session_state.locked:
     search_num = st.text_input("Enter Consumer Number", max_chars=3)
 
     if search_num and re.match(r"^\d{3}$", search_num):
-        result = df[df['Consumer Number'].astype(str) == search_num]
+        result = df[df['Consumer Number'].astype(str).str.zfill(3) == search_num]
         if not result.empty:
             row = result.iloc[0]
-            target_col = next((col for col in df.columns if str(col) == target_abbr or (isinstance(col, (datetime, pd.Timestamp)) and col.month == m_idx + 1 and col.year == sel_year)), None)
+            target_col = next((col for col in df.columns if str(col).strip() == target_abbr or (isinstance(col, (datetime, pd.Timestamp)) and col.month == m_idx + 1 and col.year == sel_year)), None)
             
             if target_col is not None:
                 amt_val = row[target_col]
                 if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
-                    with st.container(border=True):
-                        # --- BANK INPUT ROW ---
-                        b_col1, b_col2 = st.columns([0.85, 0.15])
-                        with b_col1:
-                            # The text box is pre-filled with session state if selected
-                            bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
-                        with b_col2:
-                            st.write(" ") # Padding for alignment
-                            if st.button("🔍 Select"):
-                                bank_selection_dialog()
+                    # --- ALIGNED BANK INPUT SECTION ---
+                    b_col1, b_col2 = st.columns([0.8, 0.2], vertical_alignment="bottom")
+                    with b_col1:
+                        bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank, placeholder="Type manually or use Select button")
+                    with b_col2:
+                        if st.button("🔍 Select", use_container_width=True):
+                            bank_selection_dialog()
 
-                        with st.form("entry_form", clear_on_submit=True):
-                            f1, f2 = st.columns(2)
-                            with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
-                            with f2: inst_no = st.text_input("No.", max_chars=6)
-                            inst_date = st.date_input("Date")
+                    with st.form("entry_form", clear_on_submit=True):
+                        f1, f2 = st.columns(2)
+                        with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
+                        with f2: inst_no = st.text_input("No.", max_chars=6)
+                        inst_date = st.date_input("Date")
 
-                            if st.form_submit_button("Add to Batch"):
-                                if bank_name and re.match(r"^\d{6}$", inst_no):
-                                    ind_amt = format_indian_currency(amt_val)
-                                    words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title() + " Only"
-                                    
-                                    st.session_state.all_receipts.append({
-                                        'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
-                                        'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
-                                        'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
-                                    })
-                                    st.session_state.selected_bank = "" # Clear for next record
-                                    st.rerun()
-                                else:
-                                    st.error("Check Bank Name and 6-digit No.")
+                        if st.form_submit_button("Add to Batch"):
+                            if bank_name and re.match(r"^\d{6}$", inst_no):
+                                ind_amt = format_indian_currency(amt_val)
+                                words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title() + " Only"
+                                
+                                st.session_state.all_receipts.append({
+                                    'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
+                                    'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
+                                    'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
+                                })
+                                st.session_state.selected_bank = "" 
+                                st.rerun()
+                            else:
+                                st.error("Invalid Entry: Check Bank Name and 6-digit Instrument No.")
 
     # --- BATCH TABLE ---
     if st.session_state.all_receipts:
@@ -172,6 +184,8 @@ if st.session_state.locked:
                 with tcol[6]:
                     if st.button("🗑️", key=f"d_{rec['id']}"):
                         st.session_state.all_receipts.pop(i)
+                        for j in range(i, len(st.session_state.all_receipts)):
+                            st.session_state.all_receipts[j]['challan'] -= 1
                         st.rerun()
 
         if st.button("🚀 Finalize Word File", type="primary"):
