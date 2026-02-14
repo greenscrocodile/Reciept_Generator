@@ -8,7 +8,7 @@ import uuid
 import re
 import os
 
-# --- 1. CONFIGURATION & BANK DATABASE ---
+# --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Challan Master", layout="wide")
 
 INDIAN_BANKS = [
@@ -40,25 +40,22 @@ if 'all_receipts' not in st.session_state:
     st.session_state.all_receipts = []
 if 'locked' not in st.session_state:
     st.session_state.locked = False
-if 'show_batch' not in st.session_state:
-    st.session_state.show_batch = False
 
 # --- 4. SIDEBAR: TEMPLATE LOADING & SETUP ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    s_challan = st.text_input("Starting No.", disabled=st.session_state.locked)
+    s_challan = st.text_input("First Challan No.", disabled=st.session_state.locked)
     s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
     st.divider()
     
-    # LOAD FROM GITHUB
     TEMPLATE_NAME = "Test.docx"
     template_bytes = None
     if os.path.exists(TEMPLATE_NAME):
-        st.success(f"✅ Template '{TEMPLATE_NAME}' loaded from GitHub")
+        st.success(f"✅ Template Loaded")
         with open(TEMPLATE_NAME, "rb") as f:
             template_bytes = f.read()
     else:
-        st.error(f"❌ {TEMPLATE_NAME} not found in project folder!")
+        st.error(f"❌ {TEMPLATE_NAME} not found!")
 
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx"])
 
@@ -69,8 +66,6 @@ with st.sidebar:
                 st.session_state.start_no = int(s_challan)
                 st.session_state.formatted_pdate = s_pdate.strftime("%d.%m.%Y")
                 st.rerun()
-            else:
-                st.error("Please ensure template exists and Excel is uploaded.")
     else:
         if st.button("Reset Session"):
             st.session_state.locked = False
@@ -79,15 +74,20 @@ with st.sidebar:
 
 # --- 5. MAIN APPLICATION FLOW ---
 if st.session_state.locked:
+    # --- METRICS BAR ---
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
-    st.columns(4)[0].metric("Next Challan No.", next_no)
+    
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("First Challan No.", st.session_state.start_no)
+    m2.metric("Current Challan No.", next_no)
+    m3.metric("Challan Date", st.session_state.formatted_pdate)
+    m4.metric("Entered Challans", curr_count)
 
-    # Read the Specific Sheet
     try:
         df = pd.read_excel(data_file, sheet_name="BILL")
     except:
-        st.error("Sheet 'BILL' not found in Excel file."); st.stop()
+        st.error("Sheet 'BILL' not found."); st.stop()
 
     st.divider()
     
@@ -110,7 +110,6 @@ if st.session_state.locked:
         
         if not result.empty:
             row = result.iloc[0]
-            # Match Column (String or Date)
             target_col = next((col for col in df.columns if str(col).strip() == target_str or 
                               (isinstance(col, (datetime, pd.Timestamp)) and col.month == month_list.index(sel_month)+1 and col.year == sel_year)), None)
             
@@ -122,23 +121,25 @@ if st.session_state.locked:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
                     
                     with st.form("entry_form", clear_on_submit=True):
-                        # --- HYBRID AUTOCOMPLETE BANK ENTRY ---
-                        bank_input = st.text_input("Bank Name", placeholder="Type to filter banks or enter manually...")
+                        # --- DYNAMIC BANK LOGIC ---
+                        # To make it truly dynamic, we use a selectbox that accepts typing.
+                        # This combines the 'type-to-filter' with the 'take any value' logic.
+                        bank_name = st.selectbox(
+                            "Bank Name (Select or type custom name below)", 
+                            options=sorted(INDIAN_BANKS) + ["OTHER / NOT IN LIST"],
+                            index=None,
+                            placeholder="Search Banks..."
+                        )
+                        custom_bank = st.text_input("Manual Bank Name (Use if bank not in list above)")
                         
-                        suggestions = [b for b in INDIAN_BANKS if bank_input.lower() in b.lower()] if bank_input else []
-                        selected_suggestion = None
-                        if suggestions:
-                            selected_suggestion = st.selectbox("Did you mean one of these?", 
-                                                             options=["(Use my typed text)"] + suggestions)
-
                         f1, f2 = st.columns(2)
-                        with f1: mode = st.selectbox("Payment Mode", ["Cheque", "Demand Draft"])
-                        with f2: inst_no = st.text_input("Inst. No.", max_chars=6)
-                        inst_date = st.date_input("Inst. Date")
+                        with f1: mode = st.selectbox("Mode", ["Cheque", "Demand Draft"])
+                        with f2: inst_no = st.text_input("No.", max_chars=6)
+                        inst_date = st.date_input("Date")
                         
                         if st.form_submit_button("Add to Batch"):
-                            # Logic for Bank Selection
-                            final_bank = selected_suggestion if (selected_suggestion and selected_suggestion != "(Use my typed text)") else bank_input
+                            # Logic: If custom bank is filled, use it. Otherwise use the selectbox.
+                            final_bank = custom_bank if custom_bank else bank_name
 
                             if final_bank and re.match(r"^\d{6}$", inst_no):
                                 ind_amt = format_indian_currency(amt_val)
@@ -149,17 +150,13 @@ if st.session_state.locked:
                                     'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
                                     'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': final_bank, 'date': inst_date.strftime("%d.%m.%Y")
                                 })
-                                st.session_state.show_batch = False
                                 st.rerun()
-                            else: st.error("Please enter a valid Bank Name and 6-digit No.")
-            else: st.error(f"Column '{target_str}' not found in Excel.")
-        else: st.error("Consumer Number not found.")
+                            else: st.error("Invalid Entry: Ensure Bank Name and 6-digit No. are correct.")
 
-    # --- 6. BATCH TABLE & FINAL DOWNLOAD ---
+    # --- 6. BATCH TABLE ---
     if st.session_state.all_receipts:
         st.divider()
-        if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
-            st.session_state.show_batch = True
+        if st.checkbox("👁️ View Batch Table"):
             for i, rec in enumerate(st.session_state.all_receipts):
                 tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 0.5])
                 tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
@@ -170,9 +167,7 @@ if st.session_state.locked:
                     st.rerun()
 
         if st.button("🚀 Generate Final Document", type="primary"):
-            # We use the template_bytes loaded from GitHub during configuration
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
-            output = io.BytesIO()
-            doc.save(output)
-            st.download_button("📥 Click to Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+            output = io.BytesIO(); doc.save(output)
+            st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
