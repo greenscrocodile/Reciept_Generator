@@ -44,13 +44,13 @@ st.markdown("""
 # --- BANK LOGOS CONFIGURATION ---
 BANKS = [
     {"name": "State Bank of India", "file": "logos/SBI.jpg"},
-    {"name": "HDFC Bank", "file": "HDFC.png"},
-    {"name": "ICICI Bank", "file": "ICICI.png"},
-    {"name": "Axis Bank", "file": "AXIS.png"},
-    {"name": "Indian Bank", "file": "INDIAN.png"},
-    {"name": "Canara Bank", "file": "CANARA.png"},
-    {"name": "Bank of Baroda", "file": "BOB.png"},
-    {"name": "Union Bank", "file": "UNION.png"},
+    {"name": "HDFC Bank", "file": "logos/SBI.jpg"},
+    {"name": "ICICI Bank", "file": "logos/SBI.jpg"},
+    {"name": "Axis Bank", "file": "logos/SBI.jpg"},
+    {"name": "Indian Bank", "file": "logos/SBI.jpg"},
+    {"name": "Canara Bank", "file": "logos/SBI.jpg"},
+    {"name": "Bank of Baroda", "file": "logos/SBI.jpg"},
+    {"name": "Union Bank", "file": "logos/SBI.jpg"},
 ]
 
 # --- UTILITY FUNCTIONS ---
@@ -69,7 +69,7 @@ def format_indian_currency(number):
     except: return "0"
 
 # --- DIALOGS ---
-@st.dialog("Select Bank", width="large")
+@st.dialog("Select Bank", width="medium")
 def bank_selection_dialog():
     st.write("### 🏦 Select Bank")
     cols = st.columns(6, gap="small")
@@ -118,7 +118,7 @@ with st.sidebar:
     TEMPLATE_NAME = "Test.docx"
     template_bytes = None
     if os.path.exists(TEMPLATE_NAME):
-        st.success(f"✅ Template Ready")
+        st.success(f"✅ Template Loaded")
         with open(TEMPLATE_NAME, "rb") as f: template_bytes = f.read()
     else: st.error(f"❌ {TEMPLATE_NAME} missing!")
 
@@ -232,3 +232,4 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
