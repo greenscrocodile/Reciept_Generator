@@ -8,17 +8,18 @@ import uuid
 import re
 import os
 
-# --- 1. CONFIGURATION ---
+# --- 1. CONFIGURATION & BANK DATABASE ---
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-INDIAN_BANKS = [
+# Expanded list for better suggestions
+INDIAN_BANKS = sorted([
     "State Bank of India", "Indian Bank", "Indian Overseas Bank", "Canara Bank", 
     "Bank of Baroda", "Punjab National Bank", "Union Bank of India", "HDFC Bank", 
     "ICICI Bank", "Axis Bank", "Kotak Mahindra Bank", "IDBI Bank", "IndusInd Bank", 
     "Federal Bank", "UCO Bank", "Central Bank of India", "Bank of India", 
     "South Indian Bank", "Karur Vysya Bank", "Karnataka Bank", "City Union Bank", 
     "Yes Bank", "IDFC First Bank", "Standard Chartered", "HSBC Bank", "Bandhan Bank"
-]
+])
 
 # --- 2. UTILITY FUNCTIONS ---
 def format_indian_currency(number):
@@ -36,26 +37,26 @@ def format_indian_currency(number):
     except: return "0"
 
 # --- 3. SESSION INITIALIZATION ---
-if 'all_receipts' not in st.session_state:
-    st.session_state.all_receipts = []
-if 'locked' not in st.session_state:
-    st.session_state.locked = False
+if 'all_receipts' not in st.session_state: st.session_state.all_receipts = []
+if 'locked' not in st.session_state: st.session_state.locked = False
+if 'show_batch' not in st.session_state: st.session_state.show_batch = False
+if 'temp_bank' not in st.session_state: st.session_state.temp_bank = ""
 
-# --- 4. SIDEBAR: TEMPLATE LOADING & SETUP ---
+# --- 4. SIDEBAR: TEMPLATE LOADING ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    s_challan = st.text_input("First Challan No.", disabled=st.session_state.locked)
-    s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
+    s_challan = st.text_input("Starting Challan No.", disabled=st.session_state.locked)
+    s_pdate = st.date_input("Challan Date", disabled=st.session_state.locked)
     st.divider()
     
     TEMPLATE_NAME = "Test.docx"
     template_bytes = None
     if os.path.exists(TEMPLATE_NAME):
-        st.success(f"✅ Template Loaded")
+        st.success(f"✅ Template '{TEMPLATE_NAME}' found")
         with open(TEMPLATE_NAME, "rb") as f:
             template_bytes = f.read()
     else:
-        st.error(f"❌ {TEMPLATE_NAME} not found!")
+        st.error(f"❌ {TEMPLATE_NAME} missing from GitHub!")
 
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx"])
 
@@ -77,9 +78,9 @@ if st.session_state.locked:
     # --- METRICS BAR ---
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
-    
+
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("First Challan No.", st.session_state.start_no)
+    m1.metric("First Challan", st.session_state.start_no)
     m2.metric("Current Challan No.", next_no)
     m3.metric("Challan Date", st.session_state.formatted_pdate)
     m4.metric("Entered Challans", curr_count)
@@ -91,7 +92,7 @@ if st.session_state.locked:
 
     st.divider()
     
-    # Period Selection
+    # Period & Search
     c1, c2 = st.columns(2)
     with c1:
         month_list = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -101,8 +102,6 @@ if st.session_state.locked:
         sel_year = st.selectbox("Select Year", options=[2025, 2026])
 
     target_str = f"{month_abbr[month_list.index(sel_month)]}-{str(sel_year)[2:]}"
-
-    # Consumer Search
     search_num = st.text_input("Enter Consumer Number (3 Digits)", max_chars=3)
     
     if search_num and re.match(r"^\d{3}$", search_num):
@@ -115,32 +114,31 @@ if st.session_state.locked:
             
             if target_col is not None:
                 amt_val = row[target_col]
-                if pd.isna(amt_val) or amt_val == 0:
-                    st.warning(f"No payment data for {target_str}")
-                else:
+                if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
                     
+                    # --- AUTOCOMPLETE BANK INPUT LOGIC ---
+                    # Using a container to keep suggestion UI close to input
+                    bank_container = st.container()
+                    typed_bank = bank_container.text_input("Bank Name", value=st.session_state.temp_bank, key="bank_field", placeholder="Start typing (e.g., 'Indi')...")
+                    
+                    # Filtering Logic
+                    suggestions = [b for b in INDIAN_BANKS if typed_bank.lower() in b.lower()] if typed_bank else []
+                    
+                    if suggestions and typed_bank.lower() != suggestions[0].lower():
+                        if st.button(f"💡 Use Suggestion: {suggestions[0]}", help="Click to auto-fill"):
+                            st.session_state.temp_bank = suggestions[0]
+                            st.rerun()
+
                     with st.form("entry_form", clear_on_submit=True):
-                        # --- DYNAMIC BANK LOGIC ---
-                        # To make it truly dynamic, we use a selectbox that accepts typing.
-                        # This combines the 'type-to-filter' with the 'take any value' logic.
-                        bank_name = st.selectbox(
-                            "Bank Name (Select or type custom name below)", 
-                            options=sorted(INDIAN_BANKS) + ["OTHER / NOT IN LIST"],
-                            index=None,
-                            placeholder="Search Banks..."
-                        )
-                        custom_bank = st.text_input("Manual Bank Name (Use if bank not in list above)")
-                        
                         f1, f2 = st.columns(2)
-                        with f1: mode = st.selectbox("Mode", ["Cheque", "Demand Draft"])
-                        with f2: inst_no = st.text_input("No.", max_chars=6)
-                        inst_date = st.date_input("Date")
+                        with f1: mode = st.selectbox("Payment Mode", ["Cheque", "Demand Draft"])
+                        with f2: inst_no = st.text_input("Inst. No.", max_chars=6)
+                        inst_date = st.date_input("Inst. Date")
                         
                         if st.form_submit_button("Add to Batch"):
-                            # Logic: If custom bank is filled, use it. Otherwise use the selectbox.
-                            final_bank = custom_bank if custom_bank else bank_name
-
+                            # Logic: Takes typed text if no suggestion clicked, or uses the state bank
+                            final_bank = typed_bank
                             if final_bank and re.match(r"^\d{6}$", inst_no):
                                 ind_amt = format_indian_currency(amt_val)
                                 words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
@@ -150,13 +148,16 @@ if st.session_state.locked:
                                     'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
                                     'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': final_bank, 'date': inst_date.strftime("%d.%m.%Y")
                                 })
+                                # Clear bank for next entry
+                                st.session_state.temp_bank = ""
                                 st.rerun()
-                            else: st.error("Invalid Entry: Ensure Bank Name and 6-digit No. are correct.")
+                            else: st.error("Invalid Bank Name or 6-digit Inst. No.")
 
-    # --- 6. BATCH TABLE ---
+    # --- 6. BATCH TABLE & FINAL DOWNLOAD ---
     if st.session_state.all_receipts:
         st.divider()
-        if st.checkbox("👁️ View Batch Table"):
+        if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
+            st.session_state.show_batch = True
             for i, rec in enumerate(st.session_state.all_receipts):
                 tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 0.5])
                 tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
@@ -169,5 +170,6 @@ if st.session_state.locked:
         if st.button("🚀 Generate Final Document", type="primary"):
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
-            output = io.BytesIO(); doc.save(output)
-            st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+            output = io.BytesIO()
+            doc.save(output)
+            st.download_button("📥 Download Now", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
