@@ -36,6 +36,7 @@ def format_indian_currency(number):
 
 if 'all_receipts' not in st.session_state: st.session_state.all_receipts = []
 if 'locked' not in st.session_state: st.session_state.locked = False
+if 'bank_input' not in st.session_state: st.session_state.bank_input = ""
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -99,36 +100,43 @@ if st.session_state.locked:
                 if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
                     
-                    with st.form("entry_form", clear_on_submit=True):
-                        # --- HYBRID AUTOCOMPLETE BANK INPUT ---
-                        # We use a placeholder to allow free typing. 
-                        bank_name = st.selectbox(
-                            "Bank Name (Type to search or enter new name)",
-                            options=sorted(INDIAN_BANKS),
-                            index=None,
-                            placeholder="Start typing...",
-                            help="If your bank is not in the list, just type the full name and press Enter."
-                        )
+                    # --- DYNAMIC AUTOCOMPLETE LOGIC ---
+                    bank_query = st.text_input("Bank Name", key="bank_field", help="Type any bank name. Suggestions appear below.")
+                    
+                    # Filter suggestions based on input
+                    if bank_query:
+                        suggestions = [b for b in INDIAN_BANKS if bank_query.lower() in b.lower()]
+                        # Limit to 5 suggestions
+                        limited_suggestions = suggestions[:5]
                         
+                        if limited_suggestions:
+                            cols = st.columns(len(limited_suggestions))
+                            for idx, suggestion in enumerate(limited_suggestions):
+                                if cols[idx].button(suggestion, key=f"sug_{idx}"):
+                                    # This is a workaround to update the text field with the button click
+                                    st.info(f"Selected: {suggestion}. Please proceed to fill payment details.")
+                                    st.session_state['selected_bank'] = suggestion
+                    
+                    with st.form("entry_form", clear_on_submit=True):
+                        # The form uses either the button-selected bank or the typed text
                         f1, f2 = st.columns(2)
                         with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
                         with f2: inst_no = st.text_input("No.", max_chars=6)
                         inst_date = st.date_input("Date")
                         
                         if st.form_submit_button("Add to Batch"):
-                            # Logic: If they selected a bank, use it. 
-                            # If they typed something not in the list, st.selectbox returns None,
-                            # so you would normally need a workaround. 
-                            # However, to avoid 'None', we ensure the user selects from the list 
-                            # OR we use a simple text input if you prefer total freedom.
+                            # Logic: Priority to the suggestion button, else use the raw text input
+                            final_bank = st.session_state.get('selected_bank', bank_query)
                             
-                            if bank_name and re.match(r"^\d{6}$", inst_no):
+                            if final_bank and re.match(r"^\d{6}$", inst_no):
                                 ind_amt = format_indian_currency(amt_val)
                                 words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
                                 st.session_state.all_receipts.append({
                                     'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
                                     'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
-                                    'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
+                                    'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': final_bank, 'date': inst_date.strftime("%d.%m.%Y")
                                 })
+                                # Clear temporary selection for next entry
+                                if 'selected_bank' in st.session_state: del st.session_state['selected_bank']
                                 st.rerun()
-                            else: st.error("Please select a bank from suggestions or check the Instrument No.")
+                            else: st.error("Please ensure Bank Name is entered and Instrument No. is 6 digits.")
