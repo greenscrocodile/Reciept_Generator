@@ -10,46 +10,35 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- CUSTOM CSS FOR IMAGE-ONLY BUTTONS ---
+# --- CUSTOM CSS FOR CLICKABLE LOGOS ---
 st.markdown("""
     <style>
     /* Nudge button to align with text input bottom */
     div[data-testid="column"] button {
         margin-top: 28px !important;
     }
-    /* Style the image to look like a button */
+    /* Logo Styling to look like buttons */
     [data-testid="stImage"] img {
-        border-radius: 8px;
-        object-fit: contain;
-        max-width: 80px !important;
-        max-height: 80px !important;
-        background-color: #ffffff;
-        border: 2px solid #eee;
-        transition: all 0.2s ease-in-out;
+        border-radius: 10px;
+        border: 2px solid #f0f2f6;
+        transition: all 0.3s ease;
         cursor: pointer;
+        max-width: 80px !important;
+        margin-bottom: -40px; /* Pull the image into the button space */
     }
-    /* Hover and Click effects */
     [data-testid="stImage"] img:hover {
-        transform: scale(1.1);
-        border-color: #FF4B4B;
+        border-color: #ff4b4b;
+        transform: scale(1.05);
         box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
     }
-    /* Center columns */
-    [data-testid="column"] {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    }
-    /* Make the button invisible but clickable over the image */
-    .stButton > button {
-        border: none !important;
-        background: transparent !important;
+    /* Style the selection button to be invisible but cover the area */
+    .bank-btn button {
+        background-color: transparent !important;
         color: transparent !important;
-        height: 0px !important;
-        padding: 0px !important;
-        margin: 0px !important;
-        line-height: 0 !important;
+        border: none !important;
+        height: 100px !important;
+        width: 100% !important;
+        z-index: 10;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -84,19 +73,22 @@ def format_indian_currency(number):
 # --- DIALOGS ---
 @st.dialog("Select Bank", width="large")
 def bank_selection_dialog():
-    st.write("### 🏦 Select Your Bank")
-    st.caption("Click on the logo to select.")
+    st.write("### 🏦 Choose a Bank")
+    st.caption("Click on the bank logo to select it.")
     
-    # 6-column grid
+    # Create a 6-column grid
     cols = st.columns(6)
     for i, bank in enumerate(BANKS):
         with cols[i % 6]:
+            # Show the Image
             if os.path.exists(bank['file']):
                 st.image(bank['file'], width=80)
+            else:
+                st.write(f"🚫 {bank['name']}")
             
-            # The button is now functionally active but visually hidden 
-            # to allow the image above it to act as the primary UI element
-            if st.button(" ", key=f"btn_{i}", use_container_width=True):
+            # The button underneath acts as the trigger. 
+            # We style it to look like it belongs to the logo.
+            if st.button(bank['name'], key=f"btn_{i}", use_container_width=True):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
 
@@ -136,6 +128,7 @@ with st.sidebar:
 
 # --- MAIN FLOW ---
 if st.session_state.locked:
+    # INFO AT THE TOP
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
 
@@ -172,11 +165,12 @@ if st.session_state.locked:
                 if not pd.isna(amt_val) and amt_val != 0:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
 
-                    b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
+                    # ALIGNED BANK INPUT SECTION
+                    b_col1, b_col2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
                     with b_col1:
-                        bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
+                        bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank, placeholder="Manual entry or click 🔍 to select")
                     with b_col2:
-                        if st.button("🔍 Select", use_container_width=True):
+                        if st.button("🔍", help="Open Bank Gallery", use_container_width=True):
                             bank_selection_dialog()
 
                     with st.form("entry_form", clear_on_submit=True):
