@@ -145,7 +145,7 @@ if st.session_state.locked:
 
                     # ALIGNED BANK INPUT SECTION (Narrower Select Button)
                     # Using [0.9, 0.1] to reduce button width significantly
-                    b_col1, b_col2 = st.columns([0.9, 0.2], vertical_alignment="bottom")
+                    b_col1, b_col2 = st.columns([0.8, 0.2], vertical_alignment="bottom")
                     with b_col1:
                         bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
                     with b_col2:
@@ -192,5 +192,6 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
