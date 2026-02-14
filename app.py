@@ -40,7 +40,7 @@ if 'locked' not in st.session_state: st.session_state.locked = False
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Configuration")
-    s_challan = st.text_input("Starting Challan", disabled=st.session_state.locked)
+    s_challan = st.text_input("Starting No.", disabled=st.session_state.locked)
     s_pdate = st.date_input("Present Date", disabled=st.session_state.locked)
     st.divider()
     
@@ -100,35 +100,59 @@ if st.session_state.locked:
                     st.success(f"**Found:** {row['Name']} | **Amt:** ₹{format_indian_currency(amt_val)}")
                     
                     with st.form("entry_form", clear_on_submit=True):
-                        # --- HYBRID AUTOCOMPLETE BANK INPUT ---
-                        # We use a placeholder to allow free typing. 
-                        bank_name = st.selectbox(
-                            "Bank Name (Type to search or enter new name)",
-                            options=sorted(INDIAN_BANKS),
-                            index=None,
-                            placeholder="Start typing...",
-                            help="If your bank is not in the list, just type the full name and press Enter."
-                        )
+                        # --- TRUE AUTOCOMPLETE LOGIC ---
+                        # 1. Text input for the actual typing
+                        bank_input = st.text_input("Bank Name", placeholder="Type bank name here...")
                         
+                        # 2. Filter suggestions based on typed text
+                        suggestions = [b for b in INDIAN_BANKS if bank_input.lower() in b.lower()] if bank_input else []
+                        
+                        # 3. If there are suggestions, show them in a selectbox. 
+                        # If the user clicks one, we'll use it. If not, we use the raw input.
+                        selected_suggestion = None
+                        if suggestions:
+                            selected_suggestion = st.selectbox("Suggestions (Optional - Click to use)", options=["(Use my typed value)"] + suggestions)
+
                         f1, f2 = st.columns(2)
                         with f1: mode = st.selectbox("Type", ["Cheque", "Demand Draft"])
                         with f2: inst_no = st.text_input("No.", max_chars=6)
                         inst_date = st.date_input("Date")
                         
                         if st.form_submit_button("Add to Batch"):
-                            # Logic: If they selected a bank, use it. 
-                            # If they typed something not in the list, st.selectbox returns None,
-                            # so you would normally need a workaround. 
-                            # However, to avoid 'None', we ensure the user selects from the list 
-                            # OR we use a simple text input if you prefer total freedom.
-                            
-                            if bank_name and re.match(r"^\d{6}$", inst_no):
+                            # Determine final bank name
+                            if selected_suggestion and selected_suggestion != "(Use my typed value)":
+                                final_bank = selected_suggestion
+                            else:
+                                final_bank = bank_input
+
+                            if final_bank and re.match(r"^\d{6}$", inst_no):
                                 ind_amt = format_indian_currency(amt_val)
                                 words = num2words(amt_val, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
                                 st.session_state.all_receipts.append({
                                     'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
                                     'name': row['Name'], 'num': row['Consumer Number'], 'month': sel_month, 'year': sel_year,
-                                    'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
+                                    'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': final_bank, 'date': inst_date.strftime("%d.%m.%Y")
                                 })
                                 st.rerun()
-                            else: st.error("Please select a bank from suggestions or check the Instrument No.")
+                            else: st.error("Please ensure Bank Name and Instrument No (6 digits) are correct.")
+
+    # --- BATCH TABLE ---
+    if st.session_state.all_receipts:
+        st.divider()
+        if st.checkbox("👁️ View Batch Table"):
+            for i, rec in enumerate(st.session_state.all_receipts):
+                tcol = st.columns([0.8, 3, 1.5, 1.5, 1.5, 2, 1.5])
+                tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
+                tcol[3].write(rec['pay_type']); tcol[4].write(rec['pay_no']); tcol[5].write(rec['bank'])
+                with tcol[6]:
+                    if st.button("🗑️", key=f"d_{rec['id']}"):
+                        st.session_state.all_receipts.pop(i)
+                        for j in range(i, len(st.session_state.all_receipts)): st.session_state.all_receipts[j]['challan'] -= 1
+                        st.rerun()
+
+        if st.button("🚀 Generate Final Word File", type="primary"):
+            doc = DocxTemplate(io.BytesIO(template_bytes))
+            doc.render({'receipts': st.session_state.all_receipts})
+            output = io.BytesIO(); doc.save(output)
+            fn = f"Challan_{date.today().strftime('%d_%m_%Y')}.docx"
+            st.download_button("📥 Download Final Document", output.getvalue(), file_name=fn)
