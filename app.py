@@ -127,7 +127,7 @@ with st.sidebar:
     TEMPLATE_NAME = "Test.docx"
     template_bytes = None
     if os.path.exists(TEMPLATE_NAME):
-        st.success(f"✅ Template Loaded")
+        st.success(f"✅ Challan Template Loaded")
         with open(TEMPLATE_NAME, "rb") as f: template_bytes = f.read()
     else: st.error(f"❌ {TEMPLATE_NAME} missing!")
     
@@ -215,7 +215,7 @@ if st.session_state.locked:
 
     # Handling entry restrictions and data retrieval
     if st.session_state.is_period and start_date > end_date:
-        st.error("'From' date must be before 'To' date. Entry Restricted.")
+        st.error("'From' date must be before 'To' date.")
     elif search_num and len(search_num) == 3 and re.match(r"^\d{3}$", search_num):
         # Look for the consumer record in the DataFrame
         result = df[df['Consumer Number'].astype(str).str.zfill(3) == search_num]
@@ -297,6 +297,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
