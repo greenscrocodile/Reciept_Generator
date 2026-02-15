@@ -59,6 +59,7 @@ BANKS = [
     {"name": "Central Bank of India", "file": "logos/Central Bank of India.jpg"},
     {"name": "Indian Overseas Bank", "file": "logos/Indian Overseas Bank.jpg"},
     {"name": "Bank of India", "file": "logos/Bank of India.jpg"},
+    {"name": "UCO Bank", "file": "logos/UCO Bank.jpg"},
 ]
 
 # --- UTILITY FUNCTIONS ---
@@ -240,6 +241,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
