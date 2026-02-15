@@ -61,7 +61,7 @@ BANKS = [
     {"name": "Deutsche Bank", "file": "logos/Deutsche Bank.jpg"},
     {"name": "Equitas Bank", "file": "logos/Equitas Bank.jpg"},
     {"name": "IDBI Bank", "file": "logos/IDBI Bank.jpg"},
-    {"name": "HSBC", "file": "logos/HSBC.jpg"},
+    {"name": "The Hongkong and Shanghai Banking Corporation", "file": "logos/HSBC.jpg"},
     {"name": "Tamilnad Mercantile Bank", "file": "logos/Tamilnad Mercantile Bank.jpg"},
     {"name": "Karnataka Bank", "file": "logos/Karnataka Bank.jpg"},
     {"name": "CSB Bank", "file": "logos/CSB Bank.jpg"},
@@ -113,10 +113,12 @@ def edit_amount_dialog(index):
         except ValueError:
             st.error("Please enter a valid whole number.")
 
+# --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state: st.session_state.all_receipts = []
 if 'locked' not in st.session_state: st.session_state.locked = False
 if 'selected_bank' not in st.session_state: st.session_state.selected_bank = ""
 if 'show_batch' not in st.session_state: st.session_state.show_batch = False
+if 'is_period' not in st.session_state: st.session_state.is_period = False
 
 with st.sidebar:
     st.header("⚙️ Configuration")
@@ -158,27 +160,32 @@ if st.session_state.locked:
 
     st.divider()
     
-    # --- NEW TOGGLE IMPLEMENTATION ---
-    billing_mode = st.radio("Billing Mode", ["Single Month", "Period of Months"], horizontal=True)
-    
+    # --- 1. TOGGLE BUTTON IMPLEMENTATION ---
+    col_t1, col_t2 = st.columns([0.2, 0.8])
+    with col_t1:
+        toggle_label = "Switch to Single Month" if st.session_state.is_period else "Switch to Period"
+        if st.button(toggle_label):
+            st.session_state.is_period = not st.session_state.is_period
+            st.rerun()
+
     month_list = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    year_options = [2025, 2026]
+    # --- 4. DEFAULT YEAR 2026 ---
+    year_options = [2026, 2025] 
 
-    if billing_mode == "Single Month":
+    if not st.session_state.is_period:
         c1, c2 = st.columns(2)
         with c1: sel_month = st.selectbox("Select Month", options=month_list)
-        with c2: sel_year = st.selectbox("Select Year", options=year_options)
+        with c2: sel_year = st.selectbox("Select Year", options=year_options, index=0)
         display_month_text = f"{sel_month} - {sel_year}"
         target_months = [(sel_month, sel_year)]
     else:
         c1, c2, c3, c4 = st.columns(4)
         with c1: f_month = st.selectbox("From Month", options=month_list)
-        with c2: f_year = st.selectbox("From Year", options=year_options)
+        with c2: f_year = st.selectbox("From Year", options=year_options, index=0)
         with c3: t_month = st.selectbox("To Month", options=month_list)
-        with c4: t_year = st.selectbox("To Year", options=year_options)
+        with c4: t_year = st.selectbox("To Year", options=year_options, index=0)
         
-        # Generate list of months between From and To
         start_date = datetime(f_year, month_list.index(f_month) + 1, 1)
         end_date = datetime(t_year, month_list.index(t_month) + 1, 1)
         
@@ -193,19 +200,20 @@ if st.session_state.locked:
             if curr.month == 12: curr = datetime(curr.year + 1, 1, 1)
             else: curr = datetime(curr.year, curr.month + 1, 1)
         
-        # Format display text for Word (e.g., November, December - 2025 and January - 2026)
         years_dict = {}
         for m, y in target_months:
             years_dict.setdefault(y, []).append(m)
         
         parts = []
         for y, m_list in years_dict.items():
-            parts.append(f"{', '.join(m_list)} - {y}")
+            # --- 2. HYPHEN REMOVAL LOGIC ---
+            parts.append(f"{', '.join(m_list)} {y}") # Removed the hyphen before the year
         display_month_text = " and ".join(parts)
 
     search_num = st.text_input("Enter Consumer Number", max_chars=3)
 
-    if search_num and re.match(r"^\d{3}$", search_num):
+    # --- 3. CONDITIONAL SEARCH DISPLAY ---
+    if search_num and len(search_num) == 3 and re.match(r"^\d{3}$", search_num):
         result = df[df['Consumer Number'].astype(str).str.zfill(3) == search_num]
         if not result.empty:
             row = result.iloc[0]
@@ -245,11 +253,13 @@ if st.session_state.locked:
                             st.session_state.all_receipts.append({
                                 'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
                                 'name': row['Name'], 'num': row['Consumer Number'], 
-                                'month': display_month_text, # This sends the formatted string to Word
+                                'month': display_month_text, 
                                 'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
                             })
                             st.session_state.selected_bank = ""; st.rerun()
                         else: st.error("Check Bank Name and 6-digit No.")
+        else:
+            st.error("Consumer Number not found.")
     
     if st.session_state.all_receipts:
         st.divider()
