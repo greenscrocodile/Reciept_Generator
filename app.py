@@ -23,8 +23,8 @@ st.markdown("""
     }
     /* ENFORCE FIXED LOGO SIZE */
     [data-testid="stImage"] img {
-        width: 60px !important;
-        height: 60px !important;
+        width: 65px !important;
+        height: 65px !important;
         object-fit: contain !important;
         border-radius: 5px;
         border: 1px solid #eee;
@@ -248,6 +248,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
