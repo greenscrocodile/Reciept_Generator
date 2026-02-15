@@ -93,26 +93,19 @@ def bank_selection_dialog():
 @st.dialog("Edit Amount")
 def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
-    # We remove commas from the display so the user sees a clean number to edit
-    current_val = rec['amount'].replace(",", "") 
+    current_val = rec['amount'].replace(",", "")
     new_amt_str = st.text_input("Enter New Amount ", value=current_val)
-    
+
     if st.button("Save Changes"):
         try:
-            # We clean the input again just in case the user typed new commas
-            clean_amt_str = new_amt_str.replace(",", "")
-            new_amt = int(float(clean_amt_str)) # Handles potential decimals safely
-            
-            # Re-format with Indian commas and generate new words
+            new_amt = int(new_amt_str)
             ind_amt = format_indian_currency(new_amt)
-            new_words = num2words(new_amt, lang='en_IN').title() + " Only"
-            
-            # Update the session state
+            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
             st.session_state.all_receipts[index]['amount'] = ind_amt
             st.session_state.all_receipts[index]['words'] = new_words
             st.rerun()
-        except:
-            st.error("Invalid number. Please enter a whole number without symbols.")
+        except ValueError:
+            st.error("Please enter a valid whole number.")
 
 # --- SESSION STATE INITIALIZATION ---
 # Prepares temporary memory for the app during the browser session
@@ -304,4 +297,5 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
