@@ -45,12 +45,20 @@ st.markdown("""
 BANKS = [
     {"name": "State Bank of India", "file": "logos/SBI.jpg"},
     {"name": "HDFC Bank", "file": "logos/HDFC.jpg"},
-    {"name": "ICICI Bank", "file": "logos/SBI.jpg"},
-    {"name": "Axis Bank", "file": "logos/SBI.jpg"},
+    {"name": "ICICI Bank", "file": "logos/ICICI Bank.jpg"},
+    {"name": "Axis Bank", "file": "logos/Axis Bank.jpg"},
     {"name": "Indian Bank", "file": "logos/Indian Bank.jpg"},
     {"name": "Canara Bank", "file": "logos/Canara.jpg"},
     {"name": "Bank of Baroda", "file": "logos/Bank of Baroda.jpg"},
     {"name": "Union Bank of India", "file": "logos/Union Bank of India.jpg"},
+    {"name": "Karur Vysya Bank", "file": "logos/KVB.jpg"},
+    {"name": "Yes Bank", "file": "logos/Yes Bank.jpg"},
+    {"name": "IDFC First Bank", "file": "logos/IDFC First Bank.jpg"},
+    {"name": "Bandhan Bank", "file": "logos/Bandhan Bank.jpg"},
+    {"name": "Kotak Mahindra Bank", "file": "logos/KMB.jpg"},
+    {"name": "ICICI Bank", "file": "logos/ICICI Bank.jpg"},
+    {"name": "Axis Bank", "file": "logos/Axis Bank.jpg"},
+    {"name": "Indian Bank", "file": "logos/Indian Bank.jpg"},
 ]
 
 # --- UTILITY FUNCTIONS ---
@@ -232,6 +240,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
