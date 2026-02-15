@@ -47,10 +47,10 @@ BANKS = [
     {"name": "HDFC Bank", "file": "logos/HDFC.jpg"},
     {"name": "ICICI Bank", "file": "logos/SBI.jpg"},
     {"name": "Axis Bank", "file": "logos/SBI.jpg"},
-    {"name": "Indian Bank", "file": "logos/SBI.jpg"},
-    {"name": "Canara Bank", "file": "logos/Canara.webp"},
-    {"name": "Bank of Baroda", "file": "logos/SBI.jpg"},
-    {"name": "Union Bank", "file": "logos/SBI.jpg"},
+    {"name": "Indian Bank", "file": "logos/Indian Bank.jpg"},
+    {"name": "Canara Bank", "file": "logos/Canara.jpg"},
+    {"name": "Bank of Baroda", "file": "logos/Bank of Barroda.jpg"},
+    {"name": "Union Bank of India", "file": "logos/Union bank of India.jpg"},
 ]
 
 # --- UTILITY FUNCTIONS ---
@@ -232,6 +232,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
