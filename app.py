@@ -115,7 +115,7 @@ def edit_amount_dialog(index):
         try:
             new_amt = int(new_amt_str)
             ind_amt = format_indian_currency(new_amt)
-            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title() + " Only"
+            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title()
             st.session_state.all_receipts[index]['amount'] = ind_amt
             st.session_state.all_receipts[index]['words'] = new_words
             st.rerun()
@@ -252,6 +252,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
