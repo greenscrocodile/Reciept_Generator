@@ -10,30 +10,18 @@ import os
 
 st.set_page_config(page_title="Challan Master", layout="wide")
 
-# --- CUSTOM CSS FOR COMPACT GRID & ALIGNMENT ---
+# --- CUSTOM CSS ---
 st.markdown("""
     <style>
-    [data-testid="stVerticalBlock"] > div {
-        gap: 0rem !important;
-    }
-    div[data-testid="column"] button {
-        margin-top: 28px !important;
-    }
+    [data-testid="stVerticalBlock"] > div { gap: 0rem !important; }
+    div[data-testid="column"] button { margin-top: 28px !important; }
     [data-testid="stImage"] img {
-        width: 65px !important;
-        height: 65px !important;
-        object-fit: contain !important;
-        border-radius: 5px;
-        border: 1px solid #eee;
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
+        width: 65px !important; height: 65px !important;
+        object-fit: contain !important; border-radius: 5px;
+        border: 1px solid #eee; display: block;
+        margin-left: auto; margin-right: auto;
     }
-    [data-testid="column"] {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
+    [data-testid="column"] { display: flex; flex-direction: column; align-items: center; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -89,11 +77,9 @@ def bank_selection_dialog():
     cols = st.columns(7, gap="small")
     for i, bank in enumerate(BANKS):
         with cols[i % 7]:
-            if os.path.exists(bank['file']):
-                st.image(bank['file'])
-            else:
-                st.caption(bank['name'])
-            if st.button("Select", key=f"btn_{i}", use_container_width=False):
+            if os.path.exists(bank['file']): st.image(bank['file'])
+            else: st.caption(bank['name'])
+            if st.button("Select", key=f"btn_{i}"):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
 
@@ -105,13 +91,10 @@ def edit_amount_dialog(index):
     if st.button("Save Changes"):
         try:
             new_amt = int(new_amt_str)
-            ind_amt = format_indian_currency(new_amt)
-            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title()
-            st.session_state.all_receipts[index]['amount'] = ind_amt
-            st.session_state.all_receipts[index]['words'] = new_words
+            st.session_state.all_receipts[index]['amount'] = format_indian_currency(new_amt)
+            st.session_state.all_receipts[index]['words'] = num2words(new_amt, lang='en_IN').title() + " Only"
             st.rerun()
-        except ValueError:
-            st.error("Please enter a valid whole number.")
+        except: st.error("Invalid number.")
 
 # --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state: st.session_state.all_receipts = []
@@ -119,6 +102,7 @@ if 'locked' not in st.session_state: st.session_state.locked = False
 if 'selected_bank' not in st.session_state: st.session_state.selected_bank = ""
 if 'show_batch' not in st.session_state: st.session_state.show_batch = False
 if 'is_period' not in st.session_state: st.session_state.is_period = False
+if 'consumer_key' not in st.session_state: st.session_state.consumer_key = 0 # For widget resetting
 
 with st.sidebar:
     st.header("⚙️ Configuration")
@@ -160,7 +144,7 @@ if st.session_state.locked:
 
     st.divider()
     
-    # --- 1. TOGGLE BUTTON IMPLEMENTATION ---
+    # --- TOGGLE BUTTON ---
     col_t1, col_t2 = st.columns([0.2, 0.8])
     with col_t1:
         toggle_label = "Switch to Single Month" if st.session_state.is_period else "Switch to Period"
@@ -170,7 +154,6 @@ if st.session_state.locked:
 
     month_list = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    # --- 4. DEFAULT YEAR 2026 ---
     year_options = [2026, 2025] 
 
     if not st.session_state.is_period:
@@ -189,31 +172,27 @@ if st.session_state.locked:
         start_date = datetime(f_year, month_list.index(f_month) + 1, 1)
         end_date = datetime(t_year, month_list.index(t_month) + 1, 1)
         
-        if start_date > end_date:
-            st.error("'From' date must be before 'To' date.")
-            st.stop()
-            
         target_months = []
-        curr = start_date
-        while curr <= end_date:
-            target_months.append((month_list[curr.month-1], curr.year))
-            if curr.month == 12: curr = datetime(curr.year + 1, 1, 1)
-            else: curr = datetime(curr.year, curr.month + 1, 1)
-        
-        years_dict = {}
-        for m, y in target_months:
-            years_dict.setdefault(y, []).append(m)
-        
-        parts = []
-        for y, m_list in years_dict.items():
-            # --- 2. HYPHEN REMOVAL LOGIC ---
-            parts.append(f"{', '.join(m_list)} {y}") # Removed the hyphen before the year
-        display_month_text = " and ".join(parts)
+        if start_date <= end_date:
+            curr = start_date
+            while curr <= end_date:
+                target_months.append((month_list[curr.month-1], curr.year))
+                if curr.month == 12: curr = datetime(curr.year + 1, 1, 1)
+                else: curr = datetime(curr.year, curr.month + 1, 1)
+            
+            years_dict = {}
+            for m, y in target_months: years_dict.setdefault(y, []).append(m)
+            parts = [f"{', '.join(m_list)} - {y}" for y, m_list in years_dict.items()]
+            display_month_text = " and ".join(parts)
+        else:
+            display_month_text = None
 
-    search_num = st.text_input("Enter Consumer Number", max_chars=3)
+    # Search remains visible regardless of date errors
+    search_num = st.text_input("Enter Consumer Number", max_chars=3, key=f"consumer_{st.session_state.consumer_key}")
 
-    # --- 3. CONDITIONAL SEARCH DISPLAY ---
-    if search_num and len(search_num) == 3 and re.match(r"^\d{3}$", search_num):
+    if st.session_state.is_period and start_date > end_date:
+        st.error("'From' date must be before 'To' date. Entry Restricted.")
+    elif search_num and len(search_num) == 3 and re.match(r"^\d{3}$", search_num):
         result = df[df['Consumer Number'].astype(str).str.zfill(3) == search_num]
         if not result.empty:
             row = result.iloc[0]
@@ -223,18 +202,15 @@ if st.session_state.locked:
             for m, y in target_months:
                 t_abbr = f"{month_abbr[month_list.index(m)]}-{str(y)[2:]}"
                 t_col = next((col for col in df.columns if str(col).strip() == t_abbr or (isinstance(col, (datetime, pd.Timestamp)) and col.month == month_list.index(m) + 1 and col.year == y)), None)
-                
                 if t_col is not None:
                     val = row[t_col]
                     total_amt += val if not pd.isna(val) else 0
                 else:
                     st.error(f"Column for {m}-{y} not found.")
-                    valid_period = False
-                    break
+                    valid_period = False; break
             
             if valid_period and total_amt > 0:
                 st.success(f"**Found:** {row['Name']} | **Total Amt:** ₹{format_indian_currency(total_amt)}")
-
                 b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
                 with b_col1: bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
                 with b_col2: 
@@ -248,19 +224,22 @@ if st.session_state.locked:
 
                     if st.form_submit_button("Add to Batch"):
                         if bank_name and re.match(r"^\d{6}$", inst_no):
-                            ind_amt = format_indian_currency(total_amt)
-                            words = num2words(total_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title() + " Only"
                             st.session_state.all_receipts.append({
                                 'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
-                                'name': row['Name'], 'num': row['Consumer Number'], 
-                                'month': display_month_text, 
-                                'amount': ind_amt, 'words': words, 'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
+                                'name': row['Name'], 'num': row['Consumer Number'], 'month': display_month_text, 
+                                'amount': format_indian_currency(total_amt), 
+                                'words': num2words(total_amt, lang='en_IN').title() + " Only",
+                                'pay_type': mode, 'pay_no': inst_no, 'bank': bank_name, 'date': inst_date.strftime("%d.%m.%Y")
                             })
-                            st.session_state.selected_bank = ""; st.rerun()
+                            # --- RESET LOGIC ---
+                            st.session_state.selected_bank = ""
+                            st.session_state.is_period = False
+                            st.session_state.consumer_key += 1 # Resets the search text box
+                            st.rerun()
                         else: st.error("Check Bank Name and 6-digit No.")
-        else:
-            st.error("Consumer Number not found.")
+        else: st.error("Consumer Number not found.")
     
+    # --- TABLE & DOWNLOAD ---
     if st.session_state.all_receipts:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
@@ -268,7 +247,6 @@ if st.session_state.locked:
             t_head = st.columns([0.7, 2.5, 1.5, 1.2, 1.2, 1.8, 1.1])
             t_head[0].write("**No.**"); t_head[1].write("**Consumer**"); t_head[2].write("**Amount**")
             t_head[3].write("**Mode**"); t_head[4].write("**No.**"); t_head[5].write("**Bank**"); t_head[6].write("**Actions**")
-
             for i, rec in enumerate(st.session_state.all_receipts):
                 tcol = st.columns([0.7, 2.5, 1.5, 1.2, 1.2, 1.8, 1.1])
                 tcol[0].write(rec['challan']); tcol[1].write(rec['name']); tcol[2].write(f"₹{rec['amount']}")
@@ -280,7 +258,6 @@ if st.session_state.locked:
                         st.session_state.all_receipts.pop(i)
                         for j in range(i, len(st.session_state.all_receipts)): st.session_state.all_receipts[j]['challan'] -= 1
                         st.rerun()
-
         if st.button("🚀 Finalize Word File", type="primary"):
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
