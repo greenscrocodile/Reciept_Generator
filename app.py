@@ -90,7 +90,7 @@ def bank_selection_dialog():
     st.write("### 🏦 Select Bank")
     cols = st.columns(7, gap="small")
     for i, bank in enumerate(BANKS):
-        with cols[i % 6]:
+        with cols[i % 7]:
             if os.path.exists(bank['file']):
                 st.image(bank['file'])
             else:
@@ -248,6 +248,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
