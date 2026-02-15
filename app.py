@@ -97,7 +97,7 @@ def bank_selection_dialog():
                 st.caption(bank['name'])
             
             # SMALLER BUTTON WIDTH
-            if st.button("Pick", key=f"btn_{i}", use_container_width=False):
+            if st.button("Select", key=f"btn_{i}", use_container_width=False):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
 
@@ -248,6 +248,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
