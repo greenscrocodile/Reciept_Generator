@@ -251,9 +251,9 @@ if st.session_state.locked:
 
                     if st.form_submit_button("Add to Batch"):
                         if bank_name and re.match(r"^\d{6}$", inst_no):
+                            cleaned_month = display_month_text[:-3]
                             # Append the final record to the batch list
                             st.session_state.all_receipts.append({
-                                cleaned_month = display_month_text[:-3]
                                 'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
                                 'name': row['Name'], 'num': row['Consumer Number'], 'month': cleaned_month, 
                                 'amount': format_indian_currency(total_amt), 
@@ -298,6 +298,7 @@ if st.session_state.locked:
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output)
             st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
