@@ -16,13 +16,29 @@ st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] > div { gap: 0.5rem !important; }
     div[data-testid="column"] button { margin-top: 28px !important; }
+    
+    /* Enforce fixed logo size */
     [data-testid="stImage"] img {
         width: 65px !important; height: 65px !important;
         object-fit: contain !important; border-radius: 5px;
         border: 1px solid #eee; display: block;
         margin-left: auto; margin-right: auto;
     }
-    [data-testid="column"] { display: flex; flex-direction: column; align-items: center; }
+    
+    /* Table font alignment and sizing */
+    .stMarkdown p {
+        font-size: 14px !important;
+        line-height: 1.6 !important;
+        margin-bottom: 0px !important;
+    }
+    
+    /* Ensure the dynamic instrument rows look uniform */
+    .instrument-row {
+        background-color: #f9f9f9;
+        padding: 5px;
+        border-radius: 5px;
+        margin-bottom: 2px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -30,8 +46,8 @@ st.markdown("""
 BANKS = [
     {"name": "State Bank of India", "file": "logos/SBI.jpg"},
     {"name": "HDFC Bank", "file": "logos/HDFC.jpg"},
-    {"name": "ICICI Bank", "file": "ICICI.png"},
-    {"name": "Axis Bank", "file": "AXIS.png"},
+    {"name": "ICICI Bank", "file": "ICICI Bank.png"},
+    {"name": "Axis Bank", "file": "Axis Bank.png"},
     {"name": "Indian Bank", "file": "logos/Indian Bank.jpg"},
     {"name": "Canara Bank", "file": "logos/Canara.jpg"},
     {"name": "Bank of Baroda", "file": "logos/Bank of Baroda.jpg"},
@@ -93,7 +109,6 @@ def edit_amount_dialog(index):
         try:
             new_amt = int(new_amt_str.replace(",", "").strip())
             st.session_state.all_receipts[index]['amount'] = format_indian_currency(new_amt)
-            # Removed 'Only' from word generation
             st.session_state.all_receipts[index]['words'] = num2words(new_amt, lang='en_IN').title()
             st.rerun()
         except: st.error("Invalid number.")
@@ -133,6 +148,7 @@ with st.sidebar:
             st.rerun()
 
 if st.session_state.locked:
+    # Top Metrics
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
     m1, m2, m3, m4 = st.columns(4)
@@ -147,10 +163,14 @@ if st.session_state.locked:
 
     st.divider()
     
+    # Check if we should disable core inputs
+    has_active_instruments = len(st.session_state.temp_instruments) > 0
+
     col_t1, col_t2 = st.columns([0.2, 0.8])
     with col_t1:
         toggle_label = "Single Month Mode" if not st.session_state.is_period else "Period Mode"
-        if st.button(toggle_label, help="Click to toggle billing mode"):
+        # RESTRICTION: Disable toggle if instruments are being added
+        if st.button(toggle_label, disabled=has_active_instruments):
             st.session_state.is_period = not st.session_state.is_period
             st.rerun()
 
@@ -158,20 +178,18 @@ if st.session_state.locked:
     month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     year_options = [2026, 2025] 
 
-    # --- PERIOD MODE IN SAME LINE ---
     if not st.session_state.is_period:
         c1, c2 = st.columns(2)
-        with c1: sel_month = st.selectbox("Select Month", options=month_list)
-        with c2: sel_year = st.selectbox("Select Year", options=year_options, index=0)
+        with c1: sel_month = st.selectbox("Select Month", options=month_list, disabled=has_active_instruments)
+        with c2: sel_year = st.selectbox("Select Year", options=year_options, index=0, disabled=has_active_instruments)
         display_month_text = f"{sel_month} - {sel_year}"
         target_months = [(sel_month, sel_year)]
     else:
-        # Month year entries in same line
         c1, c2, c3, c4 = st.columns(4)
-        with c1: f_month = st.selectbox("From Month", options=month_list)
-        with c2: f_year = st.selectbox("From Year", options=year_options, index=0)
-        with c3: t_month = st.selectbox("To Month", options=month_list)
-        with c4: t_year = st.selectbox("To Year", options=year_options, index=0)
+        with c1: f_month = st.selectbox("From Month", options=month_list, disabled=has_active_instruments)
+        with c2: f_year = st.selectbox("From Year", options=year_options, index=0, disabled=has_active_instruments)
+        with c3: t_month = st.selectbox("To Month", options=month_list, disabled=has_active_instruments)
+        with c4: t_year = st.selectbox("To Year", options=year_options, index=0, disabled=has_active_instruments)
         
         start_date = datetime(f_year, month_list.index(f_month) + 1, 1)
         end_date = datetime(t_year, month_list.index(t_month) + 1, 1)
@@ -189,7 +207,8 @@ if st.session_state.locked:
             display_month_text = " and ".join(parts)
         else: display_month_text = None
 
-    search_num = st.text_input("Enter Consumer Number", max_chars=3, key=f"consumer_{st.session_state.consumer_key}")
+    # RESTRICTION: Disable consumer number if instruments are being added
+    search_num = st.text_input("Enter Consumer Number", max_chars=3, key=f"consumer_{st.session_state.consumer_key}", disabled=has_active_instruments)
 
     if st.session_state.is_period and start_date > end_date:
         st.error("'From' date must be before 'To' date.")
@@ -206,24 +225,24 @@ if st.session_state.locked:
             if total_amt > 0:
                 st.success(f"**Found:** {row['Name']} | **Total Amt:** ₹{format_indian_currency(total_amt)}")
                 
-                # --- BANK NAME OUTSIDE INSTRUMENT SECTION ---
+                # RESTRICTION: Disable Bank selection if instruments are active
                 b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
-                with b_col1: bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
+                with b_col1: bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank, disabled=has_active_instruments)
                 with b_col2: 
-                    if st.button("🔍 Select"): bank_selection_dialog()
+                    if st.button("🔍 Select", disabled=has_active_instruments): bank_selection_dialog()
 
                 # --- INSTRUMENT ENTRY ---
                 with st.expander("💳 Add Payment Instruments", expanded=True):
-                    # Check for restricted mode
                     restricted_mode = None
                     if st.session_state.temp_instruments:
                         restricted_mode = st.session_state.temp_instruments[0]['type']
 
                     with st.form("instrument_form", clear_on_submit=True):
+                        # ALIGNMENT: Proper spacing for Cheque details
                         f1, f2, f3 = st.columns(3)
                         with f1: 
                             if restricted_mode:
-                                st.info(f"Mode locked: {restricted_mode}")
+                                st.info(f"Mode: {restricted_mode}")
                                 i_type = restricted_mode
                             else:
                                 i_type = st.selectbox("Type", ["Cheque", "Demand Draft"])
@@ -238,9 +257,13 @@ if st.session_state.locked:
                                 st.rerun()
                             else: st.error("Check Bank/No.")
 
+                    # ALIGNMENT: Uniform font and line spacing for instrument list
                     for idx, inst in enumerate(st.session_state.temp_instruments):
-                        cols = st.columns([3, 2, 2, 2, 0.5])
-                        cols[0].write(f"🏦 {inst['bank']}"); cols[1].write(f"📄 {inst['type']}"); cols[2].write(f"# {inst['no']}"); cols[3].write(f"📅 {inst['date']}")
+                        cols = st.columns([2.5, 2, 2, 2, 0.5])
+                        cols[0].write(f"🏦 {inst['bank']}")
+                        cols[1].write(f"📄 {inst['type']}")
+                        cols[2].write(f"🔢 {inst['no']}")
+                        cols[3].write(f"📅 {inst['date']}")
                         if cols[4].button("🗑️", key=f"del_tmp_{idx}"): st.session_state.temp_instruments.pop(idx); st.rerun()
 
                 if st.button("🚀 Add to Batch", type="primary"):
@@ -250,7 +273,7 @@ if st.session_state.locked:
                             'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
                             'name': row['Name'], 'num': row['Consumer Number'], 'month': display_month_text, 
                             'amount': format_indian_currency(total_amt), 
-                            'words': num2words(total_amt, lang='en_IN').title(), # Removed 'Only'
+                            'words': num2words(total_amt, lang='en_IN').title(),
                             'pay_type': st.session_state.temp_instruments[0]['type'],
                             'pay_no': ", ".join([i['no'] for i in st.session_state.temp_instruments]),
                             'bank': bank_name,
