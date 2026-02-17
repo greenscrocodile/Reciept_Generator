@@ -17,22 +17,19 @@ st.markdown("""
     [data-testid="stVerticalBlock"] > div { gap: 0.5rem !important; }
     div[data-testid="column"] button { margin-top: 28px !important; }
     
-    /* Enforce fixed logo size */
     [data-testid="stImage"] img {
         width: 65px !important; height: 65px !important;
         object-fit: contain !important; border-radius: 5px;
         border: 1px solid #eee; display: block;
         margin-left: auto; margin-right: auto;
     }
-    
-    /* Table font alignment and sizing */
+
     .stMarkdown p {
         font-size: 14px !important;
         line-height: 1.6 !important;
         margin-bottom: 0px !important;
     }
-    
-    /* Ensure the dynamic instrument rows look uniform */
+
     .instrument-row {
         background-color: #f9f9f9;
         padding: 5px;
@@ -76,7 +73,7 @@ BANKS = [
 
 def format_indian_currency(number):
     try:
-        main = str(int(float(number))) 
+        main = str(int(float(number)))
         if len(main) <= 3: return main
         last_three = main[-3:]
         remaining = main[:-3]
@@ -86,7 +83,8 @@ def format_indian_currency(number):
             remaining = remaining[:-2]
         if remaining: res = remaining + res
         return f"{res},{last_three}"
-    except: return "0"
+    except:
+        return "0"
 
 @st.dialog("Select Bank", width="medium")
 def bank_selection_dialog():
@@ -94,8 +92,10 @@ def bank_selection_dialog():
     cols = st.columns(7, gap="small")
     for i, bank in enumerate(BANKS):
         with cols[i % 7]:
-            if os.path.exists(bank['file']): st.image(bank['file'])
-            else: st.caption(bank['name'])
+            if os.path.exists(bank['file']):
+                st.image(bank['file'])
+            else:
+                st.caption(bank['name'])
             if st.button("Select", key=f"btn_{i}"):
                 st.session_state.selected_bank = bank['name']
                 st.rerun()
@@ -123,24 +123,40 @@ if 'locked' not in st.session_state: st.session_state.locked = False
 if 'selected_bank' not in st.session_state: st.session_state.selected_bank = ""
 if 'show_batch' not in st.session_state: st.session_state.show_batch = False
 if 'is_period' not in st.session_state: st.session_state.is_period = False
-if 'consumer_key' not in st.session_state: st.session_state.consumer_key = 0 
+if 'consumer_key' not in st.session_state: st.session_state.consumer_key = 0
 if 'temp_instruments' not in st.session_state: st.session_state.temp_instruments = []
 
 with st.sidebar:
     st.header("⚙️ Configuration")
     s_challan = st.text_input("Starting Challan", disabled=st.session_state.locked)
     s_pdate = st.date_input("Challan Date", disabled=st.session_state.locked)
+
+    # --- VALIDATION ---
+    if s_challan and not s_challan.isdigit():
+        st.error("Challan Number must contain Numbers only.")
+
     st.divider()
     TEMPLATE_NAME = "Test.docx"
     template_bytes = None
+
     if os.path.exists(TEMPLATE_NAME):
         st.success("✅ Challan Template Loaded")
-        with open(TEMPLATE_NAME, "rb") as f: template_bytes = f.read()
-    else: st.error(f"❌ {TEMPLATE_NAME} missing!")
+        with open(TEMPLATE_NAME, "rb") as f:
+            template_bytes = f.read()
+    else:
+        st.error(f"❌ {TEMPLATE_NAME} Missing!")
+
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx"])
+
     if not st.session_state.locked:
         if st.button("Confirm Setup", type="primary"):
-            if s_challan and template_bytes and data_file:
+            if not s_challan or not s_challan.isdigit():
+                st.error("Enter a valid Numeric Challan Number.")
+            elif not template_bytes:
+                st.error("Template not Loaded.")
+            elif not data_file:
+                st.error("Upload Master Data.")
+            else:
                 st.session_state.locked = True
                 st.session_state.start_no = int(s_challan)
                 st.session_state.formatted_pdate = s_pdate.strftime("%d.%m.%Y")
@@ -151,10 +167,15 @@ with st.sidebar:
             st.session_state.all_receipts = []
             st.rerun()
 
+# =============================
+# EXISTING LOGIC CONTINUES
+# =============================
+
 if st.session_state.locked:
-    # Top Metrics
+
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
+
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("First Challan", st.session_state.start_no)
     m2.metric("Current No.", next_no)
@@ -163,73 +184,100 @@ if st.session_state.locked:
 
     try:
         df = pd.read_excel(data_file, sheet_name="BILL")
-    except: st.error("Sheet 'BILL' not found."); st.stop()
+    except:
+        st.error("Sheet 'BILL' not found.")
+        st.stop()
 
     st.divider()
-    
-    # Check if we should disable core inputs
+
     has_active_instruments = len(st.session_state.temp_instruments) > 0
 
     col_t1, col_t2 = st.columns([0.2, 0.8])
     with col_t1:
         toggle_label = "Single Month Mode" if not st.session_state.is_period else "Period Mode"
-        # RESTRICTION: Disable toggle if instruments are being added
         if st.button(toggle_label, disabled=has_active_instruments):
             st.session_state.is_period = not st.session_state.is_period
             st.rerun()
 
-    month_list = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
-    month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    year_options = [2026, 2025] 
+    month_list = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+    month_abbr = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    year_options = [2026, 2025]
 
     if not st.session_state.is_period:
         c1, c2 = st.columns(2)
-        with c1: sel_month = st.selectbox("Select Month", options=month_list, disabled=has_active_instruments)
-        with c2: sel_year = st.selectbox("Select Year", options=year_options, index=0, disabled=has_active_instruments)
+        with c1:
+            sel_month = st.selectbox("Select Month", options=month_list, disabled=has_active_instruments)
+        with c2:
+            sel_year = st.selectbox("Select Year", options=year_options, index=0, disabled=has_active_instruments)
+
         display_month_text = f"{sel_month} - {sel_year}"
         target_months = [(sel_month, sel_year)]
+
     else:
         c1, c2, c3, c4 = st.columns(4)
         with c1: f_month = st.selectbox("From Month", options=month_list, disabled=has_active_instruments)
         with c2: f_year = st.selectbox("From Year", options=year_options, index=0, disabled=has_active_instruments)
         with c3: t_month = st.selectbox("To Month", options=month_list, disabled=has_active_instruments)
         with c4: t_year = st.selectbox("To Year", options=year_options, index=0, disabled=has_active_instruments)
-        
-        start_date = datetime(f_year, month_list.index(f_month) + 1, 1)
-        end_date = datetime(t_year, month_list.index(t_month) + 1, 1)
-        
+
+        start_date = datetime(f_year, month_list.index(f_month)+1, 1)
+        end_date = datetime(t_year, month_list.index(t_month)+1, 1)
+
         target_months = []
+
         if start_date <= end_date:
             curr = start_date
             while curr <= end_date:
                 target_months.append((month_list[curr.month-1], curr.year))
-                if curr.month == 12: curr = datetime(curr.year + 1, 1, 1)
-                else: curr = datetime(curr.year, curr.month + 1, 1)
-            years_dict = {}
-            for m, y in target_months: years_dict.setdefault(y, []).append(m)
-            parts = [f"{', '.join(m_list)} - {y}" for y, m_list in years_dict.items()]
-            display_month_text = " and ".join(parts)
-        else: display_month_text = None
+                curr = datetime(curr.year+1,1,1) if curr.month==12 else datetime(curr.year,curr.month+1,1)
+        else:
+            st.error("'From' date must be before 'To' date.")
 
-    # RESTRICTION: Disable consumer number if instruments are being added
-    search_num = st.text_input("Enter Consumer Number", max_chars=3, key=f"consumer_{st.session_state.consumer_key}", disabled=has_active_instruments)
+        if not target_months:
+            st.warning("Selected Month-Year range is empty.")
 
-    if st.session_state.is_period and start_date > end_date:
-        st.error("'From' date must be before 'To' date.")
-    elif search_num and len(search_num) == 3 and re.match(r"^\d{3}$", search_num):
-        result = df[df['Consumer Number'].astype(str).str.zfill(3) == search_num]
-        if not result.empty:
+    search_num = st.text_input(
+        "Enter Consumer Number",
+        max_chars=3,
+        key=f"consumer_{st.session_state.consumer_key}",
+        disabled=has_active_instruments
+    )
+
+    if search_num and not re.match(r"^\d*$", search_num):
+        st.error("Consumer Number must contain numbers only.")
+
+    elif search_num and len(search_num)==3 and re.match(r"^\d{3}$", search_num):
+
+        result = df[df['Consumer Number'].astype(str).str.zfill(3)==search_num]
+
+        if result.empty:
+            st.error("Consumer not found in Master Data.")
+
+        else:
             row = result.iloc[0]
             total_amt = 0
+            month_found = False
+
             for m, y in target_months:
                 t_abbr = f"{month_abbr[month_list.index(m)]}-{str(y)[2:]}"
-                t_col = next((col for col in df.columns if str(col).strip() == t_abbr or (isinstance(col, (datetime, pd.Timestamp)) and col.month == month_list.index(m) + 1 and col.year == y)), None)
-                if t_col is not None: total_amt += row[t_col] if not pd.isna(row[t_col]) else 0
+                t_col = next((col for col in df.columns if str(col).strip()==t_abbr or
+                             (isinstance(col,(datetime,pd.Timestamp)) and col.month==month_list.index(m)+1 and col.year==y)),None)
 
-            if total_amt > 0:
+                if t_col is not None:
+                    month_found = True
+                    total_amt += row[t_col] if not pd.isna(row[t_col]) else 0
+
+            if not month_found:
+                st.error("Selected Month-Year column not found in Master Data.")
+
+            elif total_amt <= 0:
+                st.warning("Amount is zero for selected Month-Year.")
+
+            else:
                 st.success(f"**Found:** {row['Name']} | **Total Amt:** ₹{format_indian_currency(total_amt)}")
-                
-                # RESTRICTION: Disable Bank selection if instruments are active
+
+
+# RESTRICTION: Disable Bank selection if instruments are active
                 b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
                 with b_col1: bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank, disabled=has_active_instruments)
                 with b_col2: 
@@ -259,7 +307,7 @@ if st.session_state.locked:
                                     'bank': bank_name, 'type': i_type, 'no': i_no, 'date': i_date.strftime("%d.%m.%Y")
                                 })
                                 st.rerun()
-                            else: st.error("Check Bank/No.")
+                            else: st.error("Check Bank Name and Cheque/DD No.")
 
                     # ALIGNMENT: Uniform font and line spacing for instrument list
                     for idx, inst in enumerate(st.session_state.temp_instruments):
@@ -305,6 +353,4 @@ if st.session_state.locked:
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output); st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
-
-
 
