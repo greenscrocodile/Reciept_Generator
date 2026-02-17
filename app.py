@@ -105,13 +105,17 @@ def edit_amount_dialog(index):
     rec = st.session_state.all_receipts[index]
     current_val = rec['amount'].replace(",", "")
     new_amt_str = st.text_input("Enter New Amount ", value=current_val)
+
     if st.button("Save Changes"):
         try:
-            new_amt = int(new_amt_str.replace(",", "").strip())
-            st.session_state.all_receipts[index]['amount'] = format_indian_currency(new_amt)
-            st.session_state.all_receipts[index]['words'] = num2words(new_amt, lang='en_IN').title()
+            new_amt = int(new_amt_str)
+            ind_amt = format_indian_currency(new_amt)
+            new_words = num2words(new_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and ")
+            st.session_state.all_receipts[index]['amount'] = ind_amt
+            st.session_state.all_receipts[index]['words'] = new_words
             st.rerun()
-        except: st.error("Invalid number.")
+        except ValueError:
+            st.error("Please enter a valid whole number.")
 
 # --- INITIALIZATION ---
 if 'all_receipts' not in st.session_state: st.session_state.all_receipts = []
@@ -130,7 +134,7 @@ with st.sidebar:
     TEMPLATE_NAME = "Test.docx"
     template_bytes = None
     if os.path.exists(TEMPLATE_NAME):
-        st.success("✅ Template Loaded")
+        st.success("✅ Challan Template Loaded")
         with open(TEMPLATE_NAME, "rb") as f: template_bytes = f.read()
     else: st.error(f"❌ {TEMPLATE_NAME} missing!")
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx"])
@@ -232,7 +236,7 @@ if st.session_state.locked:
                     if st.button("🔍 Select", disabled=has_active_instruments): bank_selection_dialog()
 
                 # --- INSTRUMENT ENTRY ---
-                with st.expander("💳 Add Payment Instruments", expanded=True):
+                with st.expander("💳 Add Payment Details", expanded=True):
                     restricted_mode = None
                     if st.session_state.temp_instruments:
                         restricted_mode = st.session_state.temp_instruments[0]['type']
@@ -249,7 +253,7 @@ if st.session_state.locked:
                         with f2: i_no = st.text_input("No.", max_chars=6)
                         with f3: i_date = st.date_input("Date")
                         
-                        if st.form_submit_button("➕ Add Instrument"):
+                        if st.form_submit_button("➕ Add Payment"):
                             if bank_name and re.match(r"^\d{6}$", i_no):
                                 st.session_state.temp_instruments.append({
                                     'bank': bank_name, 'type': i_type, 'no': i_no, 'date': i_date.strftime("%d.%m.%Y")
@@ -267,7 +271,7 @@ if st.session_state.locked:
                         if cols[4].button("🗑️", key=f"del_tmp_{idx}"): st.session_state.temp_instruments.pop(idx); st.rerun()
 
                 if st.button("🚀 Add to Batch", type="primary"):
-                    if not st.session_state.temp_instruments: st.error("Add at least one instrument.")
+                    if not st.session_state.temp_instruments: st.error("Add at least One Payment Details.")
                     else:
                         st.session_state.all_receipts.append({
                             'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
@@ -301,4 +305,5 @@ if st.session_state.locked:
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output); st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
