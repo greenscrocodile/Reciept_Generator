@@ -14,7 +14,7 @@ st.set_page_config(page_title="Challan Master", layout="wide")
 # --- CUSTOM CSS ---
 st.markdown("""
     <style>
-    [data-testid="stVerticalBlock"] > div { gap: 0rem !important; }
+    [data-testid="stVerticalBlock"] > div { gap: 0.5rem !important; }
     div[data-testid="column"] button { margin-top: 28px !important; }
     [data-testid="stImage"] img {
         width: 65px !important; height: 65px !important;
@@ -30,8 +30,8 @@ st.markdown("""
 BANKS = [
     {"name": "State Bank of India", "file": "logos/SBI.jpg"},
     {"name": "HDFC Bank", "file": "logos/HDFC.jpg"},
-    {"name": "ICICI Bank", "file": "logos/ICICI Bank.jpg"},
-    {"name": "Axis Bank", "file": "logos/Axis Bank.jpg"},
+    {"name": "ICICI Bank", "file": "ICICI.png"},
+    {"name": "Axis Bank", "file": "AXIS.png"},
     {"name": "Indian Bank", "file": "logos/Indian Bank.jpg"},
     {"name": "Canara Bank", "file": "logos/Canara.jpg"},
     {"name": "Bank of Baroda", "file": "logos/Bank of Baroda.jpg"},
@@ -93,7 +93,8 @@ def edit_amount_dialog(index):
         try:
             new_amt = int(new_amt_str.replace(",", "").strip())
             st.session_state.all_receipts[index]['amount'] = format_indian_currency(new_amt)
-            st.session_state.all_receipts[index]['words'] = num2words(new_amt, lang='en_IN').title() + " Only"
+            # Removed 'Only' from word generation
+            st.session_state.all_receipts[index]['words'] = num2words(new_amt, lang='en_IN').title()
             st.rerun()
         except: st.error("Invalid number.")
 
@@ -106,23 +107,18 @@ if 'is_period' not in st.session_state: st.session_state.is_period = False
 if 'consumer_key' not in st.session_state: st.session_state.consumer_key = 0 
 if 'temp_instruments' not in st.session_state: st.session_state.temp_instruments = []
 
-# --- SIDEBAR: CONFIGURATION ---
 with st.sidebar:
     st.header("⚙️ Configuration")
     s_challan = st.text_input("Starting Challan", disabled=st.session_state.locked)
     s_pdate = st.date_input("Challan Date", disabled=st.session_state.locked)
     st.divider()
-    
-    # Template load alert in UI
     TEMPLATE_NAME = "Test.docx"
     template_bytes = None
     if os.path.exists(TEMPLATE_NAME):
-        st.success(f"✅ Template Loaded")
+        st.success("✅ Template Loaded")
         with open(TEMPLATE_NAME, "rb") as f: template_bytes = f.read()
     else: st.error(f"❌ {TEMPLATE_NAME} missing!")
-    
     data_file = st.file_uploader("Upload Master Data (.xlsx)", type=["xlsx"])
-    
     if not st.session_state.locked:
         if st.button("Confirm Setup", type="primary"):
             if s_challan and template_bytes and data_file:
@@ -136,9 +132,7 @@ with st.sidebar:
             st.session_state.all_receipts = []
             st.rerun()
 
-# --- MAIN FLOW ---
 if st.session_state.locked:
-    # Top Metrics Restored
     curr_count = len(st.session_state.all_receipts)
     next_no = st.session_state.start_no + curr_count
     m1, m2, m3, m4 = st.columns(4)
@@ -153,11 +147,10 @@ if st.session_state.locked:
 
     st.divider()
     
-    # Billing Mode Toggle
     col_t1, col_t2 = st.columns([0.2, 0.8])
     with col_t1:
-        toggle_label = "Switch to Single Month" if st.session_state.is_period else "Switch to Period"
-        if st.button(toggle_label):
+        toggle_label = "Single Month Mode" if not st.session_state.is_period else "Period Mode"
+        if st.button(toggle_label, help="Click to toggle billing mode"):
             st.session_state.is_period = not st.session_state.is_period
             st.rerun()
 
@@ -165,6 +158,7 @@ if st.session_state.locked:
     month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     year_options = [2026, 2025] 
 
+    # --- PERIOD MODE IN SAME LINE ---
     if not st.session_state.is_period:
         c1, c2 = st.columns(2)
         with c1: sel_month = st.selectbox("Select Month", options=month_list)
@@ -172,9 +166,13 @@ if st.session_state.locked:
         display_month_text = f"{sel_month} - {sel_year}"
         target_months = [(sel_month, sel_year)]
     else:
+        # Month year entries in same line
         c1, c2, c3, c4 = st.columns(4)
-        with c1: f_month = st.selectbox("From Month", options=month_list); f_year = st.selectbox("From Year", options=year_options, index=0)
-        with c3: t_month = st.selectbox("To Month", options=month_list); t_year = st.selectbox("To Year", options=year_options, index=0)
+        with c1: f_month = st.selectbox("From Month", options=month_list)
+        with c2: f_year = st.selectbox("From Year", options=year_options, index=0)
+        with c3: t_month = st.selectbox("To Month", options=month_list)
+        with c4: t_year = st.selectbox("To Year", options=year_options, index=0)
+        
         start_date = datetime(f_year, month_list.index(f_month) + 1, 1)
         end_date = datetime(t_year, month_list.index(t_month) + 1, 1)
         
@@ -208,21 +206,35 @@ if st.session_state.locked:
             if total_amt > 0:
                 st.success(f"**Found:** {row['Name']} | **Total Amt:** ₹{format_indian_currency(total_amt)}")
                 
+                # --- BANK NAME OUTSIDE INSTRUMENT SECTION ---
+                b_col1, b_col2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
+                with b_col1: bank_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
+                with b_col2: 
+                    if st.button("🔍 Select"): bank_selection_dialog()
+
                 # --- INSTRUMENT ENTRY ---
                 with st.expander("💳 Add Payment Instruments", expanded=True):
-                    ic1, ic2 = st.columns([0.9, 0.1], vertical_alignment="bottom")
-                    with ic1: b_name = st.text_input("Bank Name", value=st.session_state.selected_bank)
-                    with ic2: 
-                        if st.button("🔍 Select"): bank_selection_dialog()
+                    # Check for restricted mode
+                    restricted_mode = None
+                    if st.session_state.temp_instruments:
+                        restricted_mode = st.session_state.temp_instruments[0]['type']
 
                     with st.form("instrument_form", clear_on_submit=True):
                         f1, f2, f3 = st.columns(3)
-                        with f1: i_type = st.selectbox("Type", ["Cheque", "Demand Draft"])
+                        with f1: 
+                            if restricted_mode:
+                                st.info(f"Mode locked: {restricted_mode}")
+                                i_type = restricted_mode
+                            else:
+                                i_type = st.selectbox("Type", ["Cheque", "Demand Draft"])
                         with f2: i_no = st.text_input("No.", max_chars=6)
                         with f3: i_date = st.date_input("Date")
+                        
                         if st.form_submit_button("➕ Add Instrument"):
-                            if b_name and re.match(r"^\d{6}$", i_no):
-                                st.session_state.temp_instruments.append({'bank': b_name, 'type': i_type, 'no': i_no, 'date': i_date.strftime("%d.%m.%Y")})
+                            if bank_name and re.match(r"^\d{6}$", i_no):
+                                st.session_state.temp_instruments.append({
+                                    'bank': bank_name, 'type': i_type, 'no': i_no, 'date': i_date.strftime("%d.%m.%Y")
+                                })
                                 st.rerun()
                             else: st.error("Check Bank/No.")
 
@@ -231,22 +243,21 @@ if st.session_state.locked:
                         cols[0].write(f"🏦 {inst['bank']}"); cols[1].write(f"📄 {inst['type']}"); cols[2].write(f"# {inst['no']}"); cols[3].write(f"📅 {inst['date']}")
                         if cols[4].button("🗑️", key=f"del_tmp_{idx}"): st.session_state.temp_instruments.pop(idx); st.rerun()
 
-                # Add to Batch Button Restored
                 if st.button("🚀 Add to Batch", type="primary"):
                     if not st.session_state.temp_instruments: st.error("Add at least one instrument.")
                     else:
                         st.session_state.all_receipts.append({
                             'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
                             'name': row['Name'], 'num': row['Consumer Number'], 'month': display_month_text, 
-                            'amount': format_indian_currency(total_amt), 'words': num2words(total_amt, lang='en_IN').title() + " Only",
+                            'amount': format_indian_currency(total_amt), 
+                            'words': num2words(total_amt, lang='en_IN').title(), # Removed 'Only'
                             'pay_type': st.session_state.temp_instruments[0]['type'],
                             'pay_no': ", ".join([i['no'] for i in st.session_state.temp_instruments]),
-                            'bank': ", ".join(list(set([i['bank'] for i in st.session_state.temp_instruments]))),
+                            'bank': bank_name,
                             'date': ", ".join(list(set([i['date'] for i in st.session_state.temp_instruments])))
                         })
                         st.session_state.temp_instruments = []; st.session_state.selected_bank = ""; st.session_state.is_period = False; st.session_state.consumer_key += 1; st.rerun()
 
-    # Table View & Finalize Restored
     if st.session_state.all_receipts:
         st.divider()
         if st.checkbox("👁️ View Batch Table", value=st.session_state.show_batch):
