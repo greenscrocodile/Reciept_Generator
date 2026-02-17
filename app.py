@@ -294,6 +294,7 @@ if st.session_state.locked:
                         f1, f2, f3 = st.columns(3)
                         with f1: 
                             if restricted_mode:
+                                st.markdown("🔒 Locked")
                                 st.info(f"Mode: {restricted_mode}")
                                 i_type = restricted_mode
                             else:
@@ -353,4 +354,5 @@ if st.session_state.locked:
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output); st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
