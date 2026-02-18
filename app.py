@@ -326,7 +326,7 @@ if st.session_state.locked:
                             'id': str(uuid.uuid4()), 'challan': next_no, 'pdate': st.session_state.formatted_pdate,
                             'name': row['Name'], 'num': row['Consumer Number'], 'month': display_month_text, 
                             'amount': format_indian_currency(total_amt), 
-                            'words': num2words(total_amt, lang='en_IN').replace(" And ", " and ").title().replace(" And ", " and "),
+                            'words': num2words(total_amt, lang='en_IN').replace(",", "").replace(" And ", " and ").title().replace(" And ", " and "),
                             'pay_type': st.session_state.temp_instruments[0]['type'],
                             'pay_no': ", ".join([i['no'] for i in st.session_state.temp_instruments]),
                             'bank': bank_name,
@@ -354,6 +354,7 @@ if st.session_state.locked:
             doc = DocxTemplate(io.BytesIO(template_bytes))
             doc.render({'receipts': st.session_state.all_receipts})
             output = io.BytesIO(); doc.save(output); st.download_button("📥 Download", output.getvalue(), file_name=f"Challans_{date.today()}.docx")
+
 
 
 
