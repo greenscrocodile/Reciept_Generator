@@ -302,6 +302,8 @@ if st.session_state.locked:
     purpose_value = ""
     description_value = ""
     breakdown_value = ""
+    tag_value = ""
+    account_value = ""
 
     if st.session_state.challan_type == "C. C":
         col_t1, _ = st.columns([0.2, 0.8])
