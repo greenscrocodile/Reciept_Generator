@@ -75,7 +75,7 @@ BANKS = [
     },
     {"name": "Karnataka Bank", "file": "logos/Karnataka Bank.jpg"},
     {"name": "CSB Bank", "file": "logos/CSB Bank.jpg"},
-    {"name": "Punjab National Bank", "file": "logos/Punjab National Bank.jpg"},
+    {"name": "Standard Chartered Bank", "file": "logos/Standard Chartered Bank.jpg"},
     {"name": "Federal Bank", "file": "logos/Federal Bank.jpg"},
 ]
 
@@ -763,3 +763,4 @@ if st.session_state.locked:
                 output.getvalue(),
                 file_name=f"Challans_{date.today()}.docx",
             )
+
